@@ -6,6 +6,7 @@ mod city;
 mod constants;
 mod input;
 mod intersection;
+mod led_chars;
 mod models;
 mod rendering;
 mod road;

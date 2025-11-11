@@ -496,6 +496,70 @@ fn should_car_stop(
 // Main Update Loop
 // ============================================================================
 
+/// Stores the decision made for a car during the read-only pass
+///
+/// This allows us to separate decision-making (which needs to read all cars)
+/// from position updates (which needs to write to cars), eliminating the
+/// need to clone the entire cars vector.
+#[derive(Clone)]
+struct CarDecision {
+    /// Whether the car should stop this frame
+    should_stop: bool,
+    /// Whether the car is at any intersection
+    at_any_intersection: bool,
+    /// Whether the car is still on screen (false = should be removed)
+    is_on_screen: bool,
+}
+
+/// Calculates what a car should do this frame (read-only operation)
+///
+/// This function only reads car state and returns a decision, making it
+/// safe to call with immutable references to all cars.
+///
+/// # Arguments
+/// * `car` - The car to calculate decisions for
+/// * `all_cars` - All cars (for collision checking)
+/// * `intersections` - All intersections with traffic lights
+/// * `all_lights_red` - Emergency mode flag
+///
+/// # Returns
+/// CarDecision containing what the car should do this frame
+fn calculate_car_decision(
+    car: &Car,
+    all_cars: &[Car],
+    intersections: &[Intersection],
+    all_lights_red: bool,
+) -> CarDecision {
+    // Check stop conditions (traffic lights, collisions, etc.)
+    let should_stop = should_car_stop(car, intersections, all_cars, all_lights_red);
+
+    // Check if car is at any intersection
+    let car_x = car.x();
+    let car_y = car.y();
+    let mut at_any_intersection = false;
+
+    for intersection in intersections {
+        let int_x = intersection.x();
+        let int_y = intersection.y();
+        let intersection_radius = INTERSECTION_RADIUS;
+        let dist_to_intersection = ((car_x - int_x).powi(2) + (car_y - int_y).powi(2)).sqrt();
+
+        if dist_to_intersection < intersection_radius {
+            at_any_intersection = true;
+            break;
+        }
+    }
+
+    // Check if car will be on screen
+    let is_on_screen = is_car_on_screen(car);
+
+    CarDecision {
+        should_stop,
+        at_any_intersection,
+        is_on_screen,
+    }
+}
+
 /// Updates all cars' positions and behaviors for one frame
 ///
 /// This is the main simulation loop that handles:
@@ -503,6 +567,10 @@ fn should_car_stop(
 /// - Collision avoidance
 /// - Intersection navigation and turning
 /// - Car removal when off-screen
+///
+/// Uses a two-pass approach to avoid cloning the cars vector:
+/// 1. Read-only pass: Calculate decisions for all cars
+/// 2. Write pass: Apply decisions and update car positions
 ///
 /// # Arguments
 /// * `cars` - Mutable vector of all cars
@@ -515,29 +583,42 @@ pub fn update_cars(
     dt: f32,
     all_lights_red: bool,
 ) {
-    // Create a snapshot for collision checking (avoid borrow issues)
-    let cars_copy = cars.clone();
+    // ========================================================================
+    // PASS 1: Calculate decisions (read-only, no clone needed!)
+    // ========================================================================
+    //
+    // We collect all decisions first using only immutable references.
+    // This eliminates the need to clone the entire cars vector.
+    let decisions: Vec<CarDecision> = cars
+        .iter()
+        .map(|car| calculate_car_decision(car, cars, intersections, all_lights_red))
+        .collect();
 
-    // Update each car and remove those that drive off-screen
+    // ========================================================================
+    // PASS 2: Apply decisions and update positions (write)
+    // ========================================================================
+    //
+    // Now we can safely mutate each car based on its pre-calculated decision.
+    let mut car_index = 0;
     cars.retain_mut(|car| {
+        let decision = &decisions[car_index];
+        car_index += 1;
+
         // Update intersection state and handle turning
-        let (at_any_intersection, _turned) = update_car_at_intersection(car, intersections);
+        let (_at_any_intersection, _turned) = update_car_at_intersection(car, intersections);
 
         // Reset flags when leaving all intersections
-        if !at_any_intersection {
+        if !decision.at_any_intersection {
             car.just_turned = false;
             car.in_intersection = false;
         }
 
-        // Check if car should stop (traffic lights, occupied intersections, collisions)
-        let stop = should_car_stop(car, intersections, &cars_copy, all_lights_red);
-
         // Move car if not stopped
-        if !stop {
+        if !decision.should_stop {
             move_car(car, dt);
         }
 
         // Keep car only if still on screen
-        is_car_on_screen(car)
+        decision.is_on_screen
     });
 }

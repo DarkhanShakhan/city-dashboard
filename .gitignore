@@ -1,1 +1,21 @@
-target
+# Rust
+target/
+Cargo.lock
+
+# WebAssembly build artifacts
+frontend/dist/
+*.wasm
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

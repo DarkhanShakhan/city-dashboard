@@ -26,31 +26,12 @@ jobs:
 
       - name: Build WASM
         run: |
-          cd frontend
-          cargo build --release --target wasm32-unknown-unknown
-
-      - name: List build artifacts (debug)
-        run: |
-          echo "=== Checking build output ==="
-          echo "Current directory:"
-          pwd
-          echo ""
-          echo "Looking for .wasm files:"
-          find . -name "*.wasm" -type f 2>/dev/null || echo "No .wasm files found"
-          echo ""
-          echo "Listing frontend/target structure:"
-          ls -lah frontend/target/ 2>/dev/null || echo "frontend/target not found"
-          echo ""
-          echo "Listing frontend/target/wasm32-unknown-unknown/ if exists:"
-          ls -lah frontend/target/wasm32-unknown-unknown/ 2>/dev/null || echo "wasm32-unknown-unknown not found"
-          echo ""
-          echo "Listing frontend/target/wasm32-unknown-unknown/release/ if exists:"
-          ls -lah frontend/target/wasm32-unknown-unknown/release/ 2>/dev/null || echo "release directory not found"
+          cargo build --release --target wasm32-unknown-unknown --manifest-path frontend/Cargo.toml
 
       - name: Prepare Deployment Directory
         run: |
           mkdir -p deploy
-          cp frontend/target/wasm32-unknown-unknown/release/frontend.wasm deploy/
+          cp target/wasm32-unknown-unknown/release/frontend.wasm deploy/
           cp frontend/index.html deploy/
 
       - name: Download Macroquad JS glue

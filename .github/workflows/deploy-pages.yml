@@ -31,8 +31,21 @@ jobs:
 
       - name: List build artifacts (debug)
         run: |
-          echo "Listing frontend/target/wasm32-unknown-unknown/release/:"
-          ls -lah frontend/target/wasm32-unknown-unknown/release/ || echo "Directory not found"
+          echo "=== Checking build output ==="
+          echo "Current directory:"
+          pwd
+          echo ""
+          echo "Looking for .wasm files:"
+          find . -name "*.wasm" -type f 2>/dev/null || echo "No .wasm files found"
+          echo ""
+          echo "Listing frontend/target structure:"
+          ls -lah frontend/target/ 2>/dev/null || echo "frontend/target not found"
+          echo ""
+          echo "Listing frontend/target/wasm32-unknown-unknown/ if exists:"
+          ls -lah frontend/target/wasm32-unknown-unknown/ 2>/dev/null || echo "wasm32-unknown-unknown not found"
+          echo ""
+          echo "Listing frontend/target/wasm32-unknown-unknown/release/ if exists:"
+          ls -lah frontend/target/wasm32-unknown-unknown/release/ 2>/dev/null || echo "release directory not found"
 
       - name: Prepare Deployment Directory
         run: |
@@ -44,8 +57,13 @@ jobs:
         run: |
           curl -o deploy/gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
 
+
+      - name: Download Macroquad JS glue
+        run: |
+          curl -o deploy/gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
+
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./deploy
+          publish_dir: deploy

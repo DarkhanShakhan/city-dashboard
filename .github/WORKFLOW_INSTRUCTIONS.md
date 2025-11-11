@@ -9,115 +9,75 @@ Due to GitHub App permissions, the workflow file needs to be added manually.
 **Content**:
 
 ```yaml
-name: Deploy to GitHub Pages
+name: Build and Deploy to GitHub Pages
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
+  contents: write
   pages: write
-  id-token: write
-
-# Allow only one concurrent deployment
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v2
 
-      - name: Setup Rust
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
           override: true
 
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v3
-        with:
-          path: frontend/target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build WASM
+      - name: Build
         run: |
           cd frontend
           cargo build --release --target wasm32-unknown-unknown
 
-      - name: Prepare dist directory
-        run: |
-          mkdir -p dist
-          cp frontend/target/wasm32-unknown-unknown/release/frontend.wasm dist/
-          cp frontend/index.html dist/
-
       - name: Download Macroquad JS glue
         run: |
-          curl -o dist/gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
+          curl -o gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Prepare Deployment Directory
+        run: |
+          mkdir -p ./deploy
+          cp ./frontend/target/wasm32-unknown-unknown/release/frontend.wasm ./deploy/
+          cp ./frontend/index.html ./deploy/
+          cp gl.js ./deploy/
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          path: ./dist
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy
 ```
 
 ## Setup Steps
 
-1. **Create the directory** (if it doesn't exist):
-   ```bash
-   mkdir -p .github/workflows
-   ```
+1. **Create the file via GitHub Web Interface** (recommended):
+   - Go to your repository on GitHub
+   - Click "Add file" → "Create new file"
+   - Name it: `.github/workflows/deploy-pages.yml`
+   - Paste the content above
+   - Commit directly to master (or your branch)
 
-2. **Create the file** and paste the content above:
-   ```bash
-   # Using your preferred editor
-   nano .github/workflows/deploy-pages.yml
-   # or
-   vim .github/workflows/deploy-pages.yml
-   # or use GitHub web interface
-   ```
-
-3. **Commit the workflow**:
-   ```bash
-   git add .github/workflows/deploy-pages.yml
-   git commit -m "Add GitHub Pages deployment workflow"
-   git push
-   ```
-
-4. **Enable GitHub Pages**:
+2. **Enable GitHub Pages**:
    - Go to repository Settings → Pages
-   - Source: Select "GitHub Actions"
+   - Source: Select "Deploy from a branch"
+   - Branch: Select `gh-pages` and `/ (root)`
+   - Click "Save"
 
-5. **Trigger deployment**:
-   - Push to master branch, or
-   - Manually run the workflow from the Actions tab
+3. **Trigger deployment**:
+   - Push to master branch (workflow will run automatically)
+   - Or manually run the workflow from the Actions tab
+
+**Note**: The `peaceiris/actions-gh-pages` action will automatically create the `gh-pages` branch on the first run.
 
 ## Alternative: Add via GitHub Web Interface
 

@@ -2,265 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>City Dashboard - Traffic Simulation</title>
     <style>
-        * {
+        html,
+        body,
+        canvas {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background: #1a1a1a;
-            color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-                sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-
-        #header {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px);
-            z-index: 100;
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        #controls {
-            margin-top: 10px;
-            font-size: 0.875rem;
-            color: #aaa;
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .control-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .key {
-            background: #333;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-weight: bold;
-            color: #fff;
-            border: 1px solid #555;
-        }
-
-        #canvas-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
             width: 100%;
-            height: 100vh;
-            padding-top: 120px;
-        }
-
-        canvas {
-            display: block;
-            background: #2a2a2a;
-            border-radius: 8px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            max-width: 95vw;
-            max-height: calc(100vh - 140px);
-        }
-
-        #loading {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: #1a1a1a;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            transition: opacity 0.5s ease-out;
-        }
-
-        #loading.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid #333;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        #loading p {
-            margin-top: 20px;
-            color: #aaa;
-            font-size: 1rem;
-        }
-
-        #error {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #ff4444;
-            color: white;
-            padding: 20px 40px;
-            border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(255, 68, 68, 0.3);
-            z-index: 1001;
-            max-width: 80%;
-            text-align: center;
-        }
-
-        #footer {
+            height: 100%;
+            overflow: hidden;
             position: absolute;
-            bottom: 10px;
-            text-align: center;
-            color: #666;
-            font-size: 0.75rem;
-        }
-
-        #footer a {
-            color: #667eea;
-            text-decoration: none;
-        }
-
-        #footer a:hover {
-            text-decoration: underline;
-        }
-
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 1.5rem;
-            }
-
-            #controls {
-                font-size: 0.75rem;
-                gap: 10px;
-            }
-
-            #header {
-                padding: 15px;
-            }
-
-            #canvas-container {
-                padding-top: 160px;
-            }
+            background: black;
+            z-index: 0;
         }
     </style>
 </head>
 <body>
-    <div id="loading">
-        <div class="spinner"></div>
-        <p>Loading City Dashboard...</p>
-    </div>
-
-    <div id="error"></div>
-
-    <div id="header">
-        <h1>🏙️ City Dashboard</h1>
-        <p style="color: #aaa; margin-bottom: 10px;">Real-time Traffic Simulation</p>
-        <div id="controls">
-            <div class="control-item">
-                <span class="key">Enter</span>
-                <span>Emergency Stop</span>
-            </div>
-            <div class="control-item">
-                <span class="key">Shift</span>
-                <span>Danger Mode</span>
-            </div>
-            <div class="control-item">
-                <span class="key">Esc</span>
-                <span>Reset</span>
-            </div>
-        </div>
-    </div>
-
-    <div id="canvas-container">
-        <canvas id="glcanvas" tabindex="1"></canvas>
-    </div>
-
-    <div id="footer">
-        Built with <a href="https://github.com/not-fl3/macroquad" target="_blank">Macroquad</a> &amp; Rust 🦀
-    </div>
-
-    <script src="./gl.js"></script>
-    <script>
-        const canvas = document.getElementById("glcanvas");
-        const loading = document.getElementById("loading");
-        const errorDiv = document.getElementById("error");
-
-        // Configure canvas
-        canvas.width = window.innerWidth * 0.9;
-        canvas.height = window.innerHeight * 0.8;
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            const maxWidth = window.innerWidth * 0.9;
-            const maxHeight = window.innerHeight * 0.8;
-
-            canvas.style.maxWidth = maxWidth + 'px';
-            canvas.style.maxHeight = maxHeight + 'px';
-        });
-
-        // Load the WASM module
-        load("./frontend.wasm").then(() => {
-            // Hide loading screen after a short delay
-            setTimeout(() => {
-                loading.classList.add('hidden');
-            }, 500);
-        }).catch((error) => {
-            console.error("Failed to load WASM module:", error);
-            loading.style.display = 'none';
-            errorDiv.style.display = 'block';
-            errorDiv.textContent = `Failed to load application: ${error.message}`;
-        });
-
-        // Prevent default behavior for keys that are used by the game
-        window.addEventListener('keydown', (e) => {
-            if (['Enter', 'Escape', 'Shift'].includes(e.key)) {
-                e.preventDefault();
-            }
-        });
-
-        // Focus canvas on page load
-        window.addEventListener('load', () => {
-            canvas.focus();
-        });
-    </script>
+    <canvas id="glcanvas" tabindex='1'></canvas>
+    <!-- Macroquad WebAssembly glue code -->
+    <script src="gl.js"></script>
+    <script>load("frontend.wasm");</script>
 </body>
 </html>

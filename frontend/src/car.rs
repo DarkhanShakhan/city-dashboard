@@ -1,131 +1,52 @@
-use crate::models::{Car, Direction, Intersection};
-use crate::traffic_light::get_traffic_light_state;
+//! Car behavior and traffic simulation logic
+//!
+//! This module handles:
+//! - Car movement and physics
+//! - Traffic light compliance
+//! - Collision avoidance
+//! - Intersection navigation and turning
+//!
+//! Cars follow left-hand traffic rules with proper lane discipline.
+
+use crate::constants::vehicle::*;
+use crate::constants::visual::ROAD_WIDTH;
+use crate::intersection::Intersection;
+use crate::models::{Car, Direction};
 use macroquad::prelude::*;
 
-pub const CAR_WIDTH: f32 = 20.0;
-pub const CAR_HEIGHT: f32 = 35.0;
-pub const CAR_SPEED: f32 = 50.0; // pixels per second
-const ROAD_WIDTH: f32 = 60.0;
+// ============================================================================
+// Traffic Control & Collision Detection
+// ============================================================================
 
-// Traffic light timing (in seconds)
-const GREEN_DURATION: f32 = 3.0;
-const YELLOW_DURATION: f32 = 1.0;
-const RED_DURATION: f32 = 3.0;
-const CYCLE_DURATION: f32 = GREEN_DURATION + YELLOW_DURATION + RED_DURATION;
-
-pub fn spawn_car(cars: &mut Vec<Car>) {
-    // Road positions as percentages
-    let vertical_percents = vec![0.15, 0.5, 0.85];
-    let horizontal_percents = vec![0.25, 0.75];
-
-    // Randomly choose vertical or horizontal road
-    let is_vertical = rand::gen_range(0, 2) == 0;
-
-    let car_colors = [BLUE, RED, YELLOW, Color::new(1.0, 0.5, 0.0, 1.0), PURPLE];
-    let color = car_colors[rand::gen_range(0, car_colors.len())];
-
-    let lane_offset = 12.0; // pixels
-
-    if is_vertical {
-        // Spawn on vertical road (moving down or up)
-        let road_index = rand::gen_range(0, vertical_percents.len());
-        let road_center_percent = vertical_percents[road_index];
-        let going_down = rand::gen_range(0, 2) == 0;
-
-        // Cars going down use left lane (offset to the left)
-        // Cars going up use right lane (offset to the right)
-        let lane_offset_percent = lane_offset / screen_width(); // Offset in x direction
-        let x_percent = if going_down {
-            road_center_percent - lane_offset_percent
-        } else {
-            road_center_percent + lane_offset_percent
-        };
-
-        // Randomly decide if car will turn (30% chance)
-        let next_turn = if rand::gen_range(0, 10) < 3 {
-            // Choose a perpendicular direction for turning
-            if rand::gen_range(0, 2) == 0 {
-                Some(Direction::Right)
-            } else {
-                Some(Direction::Left)
-            }
-        } else {
-            None // Go straight
-        };
-
-        cars.push(Car {
-            x_percent,
-            y_percent: if going_down { -0.05 } else { 1.05 }, // Spawn just off screen
-            direction: if going_down {
-                Direction::Down
-            } else {
-                Direction::Up
-            },
-            color,
-            road_index,
-            next_turn,
-            just_turned: false,
-            in_intersection: false,
-        });
-    } else {
-        // Spawn on horizontal road (moving right or left)
-        let road_index = rand::gen_range(0, horizontal_percents.len());
-        let road_center_percent = horizontal_percents[road_index];
-        let going_right = rand::gen_range(0, 2) == 0;
-
-        // Cars going right use bottom lane (offset down)
-        // Cars going left use top lane (offset up)
-        let lane_offset_percent = lane_offset / screen_height(); // Offset in y direction
-        let y_percent = if going_right {
-            road_center_percent + lane_offset_percent
-        } else {
-            road_center_percent - lane_offset_percent
-        };
-
-        // Randomly decide if car will turn (30% chance)
-        let next_turn = if rand::gen_range(0, 10) < 3 {
-            // Choose a perpendicular direction for turning
-            if rand::gen_range(0, 2) == 0 {
-                Some(Direction::Down)
-            } else {
-                Some(Direction::Up)
-            }
-        } else {
-            None // Go straight
-        };
-
-        cars.push(Car {
-            x_percent: if going_right { -0.05 } else { 1.05 }, // Spawn just off screen
-            y_percent,
-            direction: if going_right {
-                Direction::Right
-            } else {
-                Direction::Left
-            },
-            color,
-            road_index,
-            next_turn,
-            just_turned: false,
-            in_intersection: false,
-        });
-    }
-}
-
+/// Checks if a car should stop for a traffic light at an intersection
+///
+/// # Arguments
+/// * `car` - The car to check
+/// * `intersection_x` - X position of intersection center (pixels)
+/// * `intersection_y` - Y position of intersection center (pixels)
+/// * `light_state` - Traffic light state (0=red, 1=yellow, 2=green)
+///
+/// # Returns
+/// `true` if car should stop, `false` if it can proceed
+///
+/// # Safety Rules
+/// - Cars already in intersection MUST continue (never stop mid-crossing)
+/// - Stop only if 30-80 pixels from intersection
+/// - Stop on red or yellow lights only
 fn check_traffic_light_at_intersection(
     car: &Car,
     intersection_x: f32,
     intersection_y: f32,
     light_state: u8,
 ) -> bool {
-    // Returns true if car should stop, false if it can go
-    // IMPORTANT: Never stop a car that's already in the intersection
+    // CRITICAL: Never stop a car that's already in the intersection
     if car.in_intersection {
         return false; // Cars in intersection must continue through
     }
 
-    let stop_distance_min = 30.0; // Minimum distance before intersection to stop
-    let stop_distance_max = 80.0; // Maximum distance to consider stopping
-    let lane_tolerance = 20.0; // Tolerance for lane detection (wider to account for lane offsets)
+    let stop_distance_min = STOP_DISTANCE_MIN;
+    let stop_distance_max = STOP_DISTANCE_MAX;
+    let lane_tolerance = LANE_TOLERANCE;
 
     let car_x = car.x();
     let car_y = car.y();
@@ -169,6 +90,19 @@ fn check_traffic_light_at_intersection(
     false
 }
 
+/// Checks if another car is currently occupying an intersection
+///
+/// Prevents multiple cars from entering the same intersection simultaneously,
+/// which would cause gridlock or collisions.
+///
+/// # Arguments
+/// * `car` - The car checking to enter
+/// * `intersection_x` - X position of intersection center
+/// * `intersection_y` - Y position of intersection center
+/// * `other_cars` - All other cars in the simulation
+///
+/// # Returns
+/// `true` if intersection is occupied by another car
 fn check_intersection_occupied(
     car: &Car,
     intersection_x: f32,
@@ -176,7 +110,7 @@ fn check_intersection_occupied(
     other_cars: &[Car],
 ) -> bool {
     // Check if another car is already in this intersection
-    let intersection_radius = 40.0; // Radius to consider as "in intersection"
+    let intersection_radius = INTERSECTION_RADIUS;
 
     for other in other_cars {
         // Skip self
@@ -198,13 +132,25 @@ fn check_intersection_occupied(
     false
 }
 
+/// Checks if car is too close to another vehicle (collision avoidance)
+///
+/// Implements basic following distance and prevents rear-end collisions.
+/// Cars maintain a 50-pixel safe following distance.
+///
+/// # Arguments
+/// * `car` - The car to check
+/// * `other_cars` - All other cars to check against
+///
+/// # Returns
+/// `true` if car should stop to avoid collision
 fn check_car_collision(car: &Car, other_cars: &[Car]) -> bool {
     // Don't stop if car is in intersection - must complete crossing
     if car.in_intersection {
         return false;
     }
 
-    let safe_distance = 50.0; // Minimum distance to maintain
+    // Minimum safe following distance in pixels
+    let safe_distance = SAFE_FOLLOWING_DISTANCE;
 
     let car_x = car.x();
     let car_y = car.y();
@@ -298,171 +244,300 @@ fn check_car_collision(car: &Car, other_cars: &[Car]) -> bool {
     false
 }
 
-pub fn update_cars(cars: &mut Vec<Car>, intersections: &[Intersection], dt: f32) {
-    // Create a copy for collision checking
-    let cars_copy = cars.clone();
+// ============================================================================
+// Car Movement Helpers
+// ============================================================================
 
-    cars.retain_mut(|car| {
-        let mut should_stop = false;
-        let mut at_any_intersection = false;
-
-        let car_x = car.x();
-        let car_y = car.y();
-
-        // Check all intersections for traffic lights and turning
-        for intersection in intersections {
-            let int_x = intersection.x();
-            let int_y = intersection.y();
-
-            // Check if car is at this intersection
-            let lane_offset = 12.0;
-            let intersection_radius = 40.0;
-            let dist_to_intersection = ((car_x - int_x).powi(2) + (car_y - int_y).powi(2)).sqrt();
-            let at_intersection = dist_to_intersection < intersection_radius;
-
-            if at_intersection {
-                at_any_intersection = true;
-                car.in_intersection = true; // Mark car as in intersection
-            }
-
-            // Check appropriate light based on car direction
-            let light_state = if car.direction == Direction::Down || car.direction == Direction::Up
-            {
-                get_traffic_light_state(intersection.time_offset) // Vertical light
-            } else {
-                get_traffic_light_state(intersection.time_offset + CYCLE_DURATION / 2.0) // Horizontal light
-            };
-
-            // Check traffic light (won't stop if already in intersection)
-            if check_traffic_light_at_intersection(car, int_x, int_y, light_state) {
-                should_stop = true;
-                break;
-            }
-
-            // Check if intersection is occupied by another car (before entering)
-            if !car.in_intersection && !should_stop {
-                let approaching_intersection = match car.direction {
-                    Direction::Down => {
-                        (car_x - int_x).abs() < 20.0 && int_y > car_y && (int_y - car_y) < 50.0
-                    }
-                    Direction::Up => {
-                        (car_x - int_x).abs() < 20.0 && int_y < car_y && (car_y - int_y) < 50.0
-                    }
-                    Direction::Right => {
-                        (car_y - int_y).abs() < 20.0 && int_x > car_x && (int_x - car_x) < 50.0
-                    }
-                    Direction::Left => {
-                        (car_y - int_y).abs() < 20.0 && int_x < car_x && (car_x - int_x) < 50.0
-                    }
-                };
-
-                if approaching_intersection
-                    && check_intersection_occupied(car, int_x, int_y, &cars_copy)
-                {
-                    should_stop = true;
-                    break;
+/// Plans the next turn for a car based on current direction
+///
+/// Randomly decides whether to turn at the next intersection and which
+/// direction to turn based on the TURN_PROBABILITY constant.
+///
+/// # Arguments
+/// * `current_direction` - The car's current direction of travel
+///
+/// # Returns
+/// `Some(Direction)` if car should turn, `None` if car should go straight
+fn plan_next_turn(current_direction: Direction) -> Option<Direction> {
+    if rand::gen_range(0.0, 1.0) < TURN_PROBABILITY {
+        match current_direction {
+            Direction::Down | Direction::Up => {
+                if rand::gen_range(0, 2) == 0 {
+                    Some(Direction::Right)
+                } else {
+                    Some(Direction::Left)
                 }
             }
-
-            // Check for turning at intersection center
-            let at_intersection_center = match car.direction {
-                Direction::Down => (car_x - int_x).abs() < 15.0 && (car_y - int_y).abs() < 10.0,
-                Direction::Up => (car_x - int_x).abs() < 15.0 && (car_y - int_y).abs() < 10.0,
-                Direction::Right => (car_y - int_y).abs() < 15.0 && (car_x - int_x).abs() < 10.0,
-                Direction::Left => (car_y - int_y).abs() < 15.0 && (car_x - int_x).abs() < 10.0,
-            };
-
-            if at_intersection_center {
-                if car.next_turn.is_some() && !car.just_turned {
-                    // Execute the turn
-                    let new_direction = car.next_turn.unwrap();
-                    car.direction = new_direction.clone();
-
-                    // Adjust position to new lane (left-hand traffic)
-                    match new_direction {
-                        Direction::Down => {
-                            car.x_percent = intersection.x_percent - (lane_offset / screen_width());
-                            car.y_percent = intersection.y_percent;
-                        }
-                        Direction::Up => {
-                            car.x_percent = intersection.x_percent + (lane_offset / screen_width());
-                            car.y_percent = intersection.y_percent;
-                        }
-                        Direction::Right => {
-                            car.x_percent = intersection.x_percent;
-                            car.y_percent =
-                                intersection.y_percent + (lane_offset / screen_height());
-                        }
-                        Direction::Left => {
-                            car.x_percent = intersection.x_percent;
-                            car.y_percent =
-                                intersection.y_percent - (lane_offset / screen_height());
-                        }
-                    }
-
-                    // Plan next turn (30% chance)
-                    car.next_turn = if rand::gen_range(0, 10) < 3 {
-                        match new_direction {
-                            Direction::Down | Direction::Up => {
-                                if rand::gen_range(0, 2) == 0 {
-                                    Some(Direction::Right)
-                                } else {
-                                    Some(Direction::Left)
-                                }
-                            }
-                            Direction::Right | Direction::Left => {
-                                if rand::gen_range(0, 2) == 0 {
-                                    Some(Direction::Down)
-                                } else {
-                                    Some(Direction::Up)
-                                }
-                            }
-                        }
-                    } else {
-                        None
-                    };
-
-                    // Mark that we just turned
-                    car.just_turned = true;
-                    break; // Only turn at one intersection
+            Direction::Right | Direction::Left => {
+                if rand::gen_range(0, 2) == 0 {
+                    Some(Direction::Down)
+                } else {
+                    Some(Direction::Up)
                 }
             }
         }
+    } else {
+        None
+    }
+}
 
-        // Reset the flags when we leave all intersections
+/// Handles car turning at intersection center
+///
+/// Executes the planned turn when the car reaches the intersection center,
+/// adjusts the car's position to the correct lane for the new direction,
+/// and plans the next turn.
+///
+/// # Arguments
+/// * `car` - The car to potentially turn
+/// * `intersection` - The intersection where turning might occur
+/// * `at_intersection_center` - Whether the car is at the intersection center
+///
+/// # Returns
+/// `true` if a turn was executed, `false` otherwise
+fn handle_car_turn(car: &mut Car, intersection: &Intersection, at_intersection_center: bool) -> bool {
+    if at_intersection_center && car.next_turn.is_some() && !car.just_turned {
+        // Execute the turn
+        let new_direction = car.next_turn.unwrap();
+        car.direction = new_direction;
+
+        // Adjust position to new lane (left-hand traffic)
+        match new_direction {
+            Direction::Down => {
+                car.x_percent = intersection.x_percent - (LANE_OFFSET / screen_width());
+                car.y_percent = intersection.y_percent;
+            }
+            Direction::Up => {
+                car.x_percent = intersection.x_percent + (LANE_OFFSET / screen_width());
+                car.y_percent = intersection.y_percent;
+            }
+            Direction::Right => {
+                car.x_percent = intersection.x_percent;
+                car.y_percent = intersection.y_percent + (LANE_OFFSET / screen_height());
+            }
+            Direction::Left => {
+                car.x_percent = intersection.x_percent;
+                car.y_percent = intersection.y_percent - (LANE_OFFSET / screen_height());
+            }
+        }
+
+        // Plan next turn
+        car.next_turn = plan_next_turn(new_direction);
+
+        // Mark that we just turned
+        car.just_turned = true;
+        true
+    } else {
+        false
+    }
+}
+
+/// Moves the car based on its direction and speed
+///
+/// Updates the car's position based on its current direction of travel
+/// and the frame delta time. Movement is calculated as percentage of
+/// screen dimensions for responsive scaling.
+///
+/// # Arguments
+/// * `car` - The car to move
+/// * `dt` - Delta time (frame duration in seconds)
+fn move_car(car: &mut Car, dt: f32) {
+    match car.direction {
+        Direction::Down => {
+            let speed_percent = CAR_SPEED * dt / screen_height();
+            car.y_percent += speed_percent;
+        }
+        Direction::Up => {
+            let speed_percent = CAR_SPEED * dt / screen_height();
+            car.y_percent -= speed_percent;
+        }
+        Direction::Right => {
+            let speed_percent = CAR_SPEED * dt / screen_width();
+            car.x_percent += speed_percent;
+        }
+        Direction::Left => {
+            let speed_percent = CAR_SPEED * dt / screen_width();
+            car.x_percent -= speed_percent;
+        }
+    }
+}
+
+/// Checks if a car is still on screen
+///
+/// Cars are kept slightly off-screen (0.1 buffer) to allow smooth
+/// spawning and despawning at screen edges.
+///
+/// # Arguments
+/// * `car` - The car to check
+///
+/// # Returns
+/// `true` if car is on or near screen, `false` if far off-screen
+fn is_car_on_screen(car: &Car) -> bool {
+    car.x_percent > -0.1 && car.x_percent < 1.1 && car.y_percent > -0.1 && car.y_percent < 1.1
+}
+
+/// Updates car state at intersections and handles turning
+///
+/// Checks all intersections to:
+/// - Update car's intersection state (in_intersection flag)
+/// - Check if car is approaching intersection center
+/// - Handle turning if at intersection center
+///
+/// # Arguments
+/// * `car` - The car to update
+/// * `intersections` - All intersections in the simulation
+///
+/// # Returns
+/// Tuple of (at_any_intersection, turned_at_intersection)
+fn update_car_at_intersection(car: &mut Car, intersections: &[Intersection]) -> (bool, bool) {
+    let mut at_any_intersection = false;
+    let car_x = car.x();
+    let car_y = car.y();
+
+    for intersection in intersections {
+        let int_x = intersection.x();
+        let int_y = intersection.y();
+
+        // Check if car is at this intersection
+        let intersection_radius = INTERSECTION_RADIUS;
+        let dist_to_intersection = ((car_x - int_x).powi(2) + (car_y - int_y).powi(2)).sqrt();
+        let at_intersection = dist_to_intersection < intersection_radius;
+
+        if at_intersection {
+            at_any_intersection = true;
+            car.in_intersection = true;
+        }
+
+        // Check for turning at intersection center
+        let at_intersection_center = match car.direction {
+            Direction::Down => (car_x - int_x).abs() < 15.0 && (car_y - int_y).abs() < 10.0,
+            Direction::Up => (car_x - int_x).abs() < 15.0 && (car_y - int_y).abs() < 10.0,
+            Direction::Right => (car_y - int_y).abs() < 15.0 && (car_x - int_x).abs() < 10.0,
+            Direction::Left => (car_y - int_y).abs() < 15.0 && (car_x - int_x).abs() < 10.0,
+        };
+
+        if handle_car_turn(car, intersection, at_intersection_center) {
+            return (at_any_intersection, true); // Turned at this intersection
+        }
+    }
+
+    (at_any_intersection, false)
+}
+
+/// Determines if a car should stop based on all conditions
+///
+/// Checks multiple stop conditions:
+/// - Traffic lights at intersections
+/// - Occupied intersections (prevent gridlock)
+/// - Collision avoidance with other cars
+///
+/// # Arguments
+/// * `car` - The car to check
+/// * `intersections` - All intersections with traffic lights
+/// * `other_cars` - All other cars for collision checking
+/// * `all_lights_red` - Emergency mode (all lights red)
+///
+/// # Returns
+/// `true` if car should stop, `false` if car can proceed
+fn should_car_stop(
+    car: &Car,
+    intersections: &[Intersection],
+    other_cars: &[Car],
+    all_lights_red: bool,
+) -> bool {
+    let car_x = car.x();
+    let car_y = car.y();
+
+    // Check all intersections for stop conditions
+    for intersection in intersections {
+        let int_x = intersection.x();
+        let int_y = intersection.y();
+
+        // Get traffic light state
+        let light_state = if all_lights_red {
+            0 // All lights red
+        } else {
+            intersection.get_light_state_for_direction(car.direction)
+        };
+
+        // Check if we should stop for traffic light
+        if check_traffic_light_at_intersection(car, int_x, int_y, light_state) {
+            return true;
+        }
+
+        // Check if intersection is occupied (before entering)
+        if !car.in_intersection {
+            let approaching_intersection = match car.direction {
+                Direction::Down => {
+                    (car_x - int_x).abs() < 20.0 && int_y > car_y && (int_y - car_y) < 50.0
+                }
+                Direction::Up => {
+                    (car_x - int_x).abs() < 20.0 && int_y < car_y && (car_y - int_y) < 50.0
+                }
+                Direction::Right => {
+                    (car_y - int_y).abs() < 20.0 && int_x > car_x && (int_x - car_x) < 50.0
+                }
+                Direction::Left => {
+                    (car_y - int_y).abs() < 20.0 && int_x < car_x && (car_x - int_x) < 50.0
+                }
+            };
+
+            if approaching_intersection && check_intersection_occupied(car, int_x, int_y, other_cars)
+            {
+                return true;
+            }
+        }
+    }
+
+    // Check for collision with other cars
+    check_car_collision(car, other_cars)
+}
+
+// ============================================================================
+// Main Update Loop
+// ============================================================================
+
+/// Updates all cars' positions and behaviors for one frame
+///
+/// This is the main simulation loop that handles:
+/// - Traffic light compliance
+/// - Collision avoidance
+/// - Intersection navigation and turning
+/// - Car removal when off-screen
+///
+/// # Arguments
+/// * `cars` - Mutable vector of all cars
+/// * `intersections` - All intersections with traffic lights
+/// * `dt` - Delta time (frame duration in seconds)
+/// * `all_lights_red` - Emergency mode flag (stops all traffic)
+pub fn update_cars(
+    cars: &mut Vec<Car>,
+    intersections: &[Intersection],
+    dt: f32,
+    all_lights_red: bool,
+) {
+    // Create a snapshot for collision checking (avoid borrow issues)
+    let cars_copy = cars.clone();
+
+    // Update each car and remove those that drive off-screen
+    cars.retain_mut(|car| {
+        // Update intersection state and handle turning
+        let (at_any_intersection, _turned) = update_car_at_intersection(car, intersections);
+
+        // Reset flags when leaving all intersections
         if !at_any_intersection {
             car.just_turned = false;
             car.in_intersection = false;
         }
 
-        // Check for collision with other cars
-        if !should_stop && check_car_collision(car, &cars_copy) {
-            should_stop = true;
-        }
+        // Check if car should stop (traffic lights, occupied intersections, collisions)
+        let stop = should_car_stop(car, intersections, &cars_copy, all_lights_red);
 
         // Move car if not stopped
-        if !should_stop {
-            match car.direction {
-                Direction::Down => {
-                    let speed_percent = CAR_SPEED * dt / screen_height();
-                    car.y_percent += speed_percent;
-                }
-                Direction::Up => {
-                    let speed_percent = CAR_SPEED * dt / screen_height();
-                    car.y_percent -= speed_percent;
-                }
-                Direction::Right => {
-                    let speed_percent = CAR_SPEED * dt / screen_width();
-                    car.x_percent += speed_percent;
-                }
-                Direction::Left => {
-                    let speed_percent = CAR_SPEED * dt / screen_width();
-                    car.x_percent -= speed_percent;
-                }
-            }
+        if !stop {
+            move_car(car, dt);
         }
 
-        // Remove cars that are off screen
-        car.x_percent > -0.1 && car.x_percent < 1.1 && car.y_percent > -0.1 && car.y_percent < 1.1
+        // Keep car only if still on screen
+        is_car_on_screen(car)
     });
 }

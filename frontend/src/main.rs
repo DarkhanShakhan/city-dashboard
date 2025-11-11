@@ -1,64 +1,94 @@
 use macroquad::prelude::*;
 
+mod block;
 mod car;
+mod city;
+mod constants;
+mod input;
 mod intersection;
 mod models;
 mod rendering;
+mod road;
+mod spawner;
 mod traffic_light;
 
-use car::{spawn_car, update_cars};
+use city::City;
+use input::{handle_input, WindowState};
 use intersection::generate_intersections;
-use models::Car;
-use rendering::{draw_car, draw_grass_blocks, draw_road_lines, draw_intersection_markings};
-use traffic_light::draw_traffic_lights;
 
-const ROAD_COLOR: Color = GRAY;
+// ============================================================================
+// Configuration Constants
+// ============================================================================
+
+use constants::{visual::ROAD_COLOR, window::RESIZE_THRESHOLD};
+
+// ============================================================================
+// Main Application
+// ============================================================================
 
 #[macroquad::main("City Dashboard")]
 async fn main() -> Result<(), macroquad::Error> {
-    let mut cars: Vec<Car> = Vec::new();
-    let mut last_spawn_time = 0.0;
-    let spawn_interval = 1.5; // Spawn a car every 1.5 seconds
+    // ========================================================================
+    // Initialization
+    // ========================================================================
 
-    // Generate all intersections at startup
+    // Initialize city with intersections
+    let mut city = City::new();
     let intersections = generate_intersections();
+    for intersection in intersections {
+        city.add_intersection(intersection);
+    }
 
-    // Track window size to detect resizing
-    let mut prev_screen_width = screen_width();
-    let mut prev_screen_height = screen_height();
+    // Initialize window state tracking
+    let mut window_state = WindowState::new();
+
+    // Initialize control modes
+    let mut all_lights_red = false; // Emergency traffic stop mode
+    let mut danger_mode = false;     // Danger warning on LED display
+
+    // ========================================================================
+    // Main Game Loop
+    // ========================================================================
 
     loop {
         let dt = get_frame_time();
+        let current_time = get_time();
 
-        // Check if window was resized
-        let current_width = screen_width();
-        let current_height = screen_height();
-        if (current_width - prev_screen_width).abs() > 1.0 || (current_height - prev_screen_height).abs() > 1.0 {
-            // Window resized - clear all cars to avoid position issues
-            cars.clear();
-            prev_screen_width = current_width;
-            prev_screen_height = current_height;
+        // --------------------------------------------------------------------
+        // Input Processing
+        // --------------------------------------------------------------------
+
+        (all_lights_red, danger_mode) = handle_input(all_lights_red, danger_mode);
+
+        // --------------------------------------------------------------------
+        // Window Resize Handling
+        // --------------------------------------------------------------------
+
+        if window_state.check_resize(RESIZE_THRESHOLD) {
+            // Clear all cars on resize to prevent positioning issues
+            // Cars will naturally respawn at correct positions
+            city.clear_cars();
         }
 
-        clear_background(ROAD_COLOR); // Roads are now the background
+        // --------------------------------------------------------------------
+        // Update Phase
+        // --------------------------------------------------------------------
 
-        draw_grass_blocks();
-        draw_road_lines();
-        draw_intersection_markings(&intersections);
-        draw_traffic_lights(&intersections);
+        city.update(dt, all_lights_red);
 
-        // Spawn new cars
-        if get_time() - last_spawn_time > spawn_interval {
-            spawn_car(&mut cars);
-            last_spawn_time = get_time();
-        }
+        // --------------------------------------------------------------------
+        // Render Phase
+        // --------------------------------------------------------------------
 
-        // Update and draw cars
-        update_cars(&mut cars, &intersections, dt);
-        for car in &cars {
-            draw_car(car);
-        }
+        // Clear screen with road color
+        clear_background(ROAD_COLOR);
 
+        // Render in layers: environment -> traffic -> overlays
+        city.render_environment();
+        city.render_traffic(all_lights_red);
+        city.render_overlays(current_time, danger_mode);
+
+        // Present frame and wait for next
         next_frame().await;
     }
 }

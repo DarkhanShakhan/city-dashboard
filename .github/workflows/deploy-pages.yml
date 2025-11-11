@@ -36,7 +36,7 @@ jobs:
 
       - name: Download Macroquad JS glue
         run: |
-          curl -o deploy/gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
+          curl -o deploy/gl.js https://raw.githubusercontent.com/not-fl3/miniquad/master/js/gl.js
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

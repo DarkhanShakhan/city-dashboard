@@ -294,6 +294,13 @@ impl TrafficLight {
 // Intersection Traffic Light (Unified Controller)
 // ============================================================================
 
+/// Represents which direction currently has or is transitioning from green light
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ActiveDirection {
+    Vertical,
+    Horizontal,
+}
+
 /// Unified traffic light controller for an intersection
 ///
 /// This struct manages both vertical and horizontal traffic lights at a single
@@ -316,6 +323,9 @@ pub struct IntersectionTrafficLight {
     /// Time remaining in current state (in seconds)
     pub time_in_state: f32,
 
+    /// Which direction is currently active (green or transitioning)
+    active_direction: ActiveDirection,
+
     /// Unique identifier
     pub id: usize,
 }
@@ -334,10 +344,18 @@ impl IntersectionTrafficLight {
         id: usize,
         vertical_starts_green: bool,
     ) -> Self {
-        let (vertical_state, horizontal_state) = if vertical_starts_green {
-            (LightState::default_green(), LightState::default_red())
+        let (vertical_state, horizontal_state, active_direction) = if vertical_starts_green {
+            (
+                LightState::default_green(),
+                LightState::default_red(),
+                ActiveDirection::Vertical,
+            )
         } else {
-            (LightState::default_red(), LightState::default_green())
+            (
+                LightState::default_red(),
+                LightState::default_green(),
+                ActiveDirection::Horizontal,
+            )
         };
 
         Self {
@@ -345,7 +363,12 @@ impl IntersectionTrafficLight {
             y_percent,
             vertical_state,
             horizontal_state,
-            time_in_state: vertical_state.duration(),
+            time_in_state: if vertical_starts_green {
+                vertical_state.duration()
+            } else {
+                horizontal_state.duration()
+            },
+            active_direction,
             id,
         }
     }
@@ -363,6 +386,7 @@ impl IntersectionTrafficLight {
     /// Updates the traffic light states based on elapsed time
     ///
     /// Automatically keeps vertical and horizontal lights coordinated.
+    /// Each direction cycles through Green → Yellow → Red properly.
     ///
     /// # Arguments
     /// * `dt` - Delta time (time since last frame in seconds)
@@ -371,10 +395,41 @@ impl IntersectionTrafficLight {
 
         // Check if it's time to transition to next state
         if self.time_in_state <= 0.0 {
-            // Transition both lights to their next states
-            self.vertical_state = self.get_next_state(self.vertical_state);
-            self.horizontal_state = self.get_opposite_state(self.vertical_state);
-            self.time_in_state = self.vertical_state.duration();
+            // Transition the active direction through its cycle
+            match self.active_direction {
+                ActiveDirection::Vertical => {
+                    // Advance vertical state
+                    let new_vertical_state = self.get_next_state(self.vertical_state);
+                    self.vertical_state = new_vertical_state;
+
+                    // If vertical just turned red, switch to horizontal
+                    if new_vertical_state.is_red() {
+                        self.active_direction = ActiveDirection::Horizontal;
+                        self.horizontal_state = LightState::default_green();
+                    } else {
+                        // Keep horizontal red while vertical is active
+                        self.horizontal_state = LightState::default_red();
+                    }
+
+                    self.time_in_state = new_vertical_state.duration();
+                }
+                ActiveDirection::Horizontal => {
+                    // Advance horizontal state
+                    let new_horizontal_state = self.get_next_state(self.horizontal_state);
+                    self.horizontal_state = new_horizontal_state;
+
+                    // If horizontal just turned red, switch to vertical
+                    if new_horizontal_state.is_red() {
+                        self.active_direction = ActiveDirection::Vertical;
+                        self.vertical_state = LightState::default_green();
+                    } else {
+                        // Keep vertical red while horizontal is active
+                        self.vertical_state = LightState::default_red();
+                    }
+
+                    self.time_in_state = new_horizontal_state.duration();
+                }
+            }
         }
     }
 
@@ -384,23 +439,6 @@ impl IntersectionTrafficLight {
             LightState::Green(_) => LightState::Yellow(YELLOW_DURATION),
             LightState::Yellow(_) => LightState::Red(RED_DURATION),
             LightState::Red(_) => LightState::Green(GREEN_DURATION),
-        }
-    }
-
-    /// Gets the opposite/complementary state for perpendicular traffic
-    fn get_opposite_state(&self, state: LightState) -> LightState {
-        match state {
-            LightState::Green(_) => LightState::Red(RED_DURATION),
-            LightState::Yellow(_) => LightState::Red(RED_DURATION),
-            LightState::Red(_) => {
-                // When one direction turns red, the other goes green
-                // But need to check if we're coming from yellow
-                if self.horizontal_state.is_red() {
-                    LightState::Green(GREEN_DURATION)
-                } else {
-                    LightState::Red(RED_DURATION)
-                }
-            }
         }
     }
 
@@ -675,17 +713,20 @@ pub fn get_traffic_light_state(time_offset: f32) -> u8 {
 
 /// Renders a single traffic light at the specified position
 ///
-/// Draws a vertical traffic light with three stacked circular lights:
-/// red (top), yellow (middle), green (bottom), with a dark box housing
+/// Draws a vertical traffic light with two stacked circular lights:
+/// red (top) and green (bottom), with a dark box housing
 /// and small pole underneath.
 ///
 /// # Arguments
 /// * `x` - X position for top-left corner of light box
 /// * `y` - Y position for top-left corner of light box
-/// * `active_light` - Which light is currently on (0=red, 1=yellow, 2=green)
+/// * `active_light` - Which light is currently on (0=red, 1=yellow (shown as red), 2=green)
 pub fn draw_traffic_light(x: f32, y: f32, active_light: u8) {
+    // Treat yellow as red for display (only show 2 colors)
+    let display_state = if active_light == 1 { 0 } else { active_light };
+
     let box_width = TRAFFIC_LIGHT_SIZE + 6.0;
-    let box_height = TRAFFIC_LIGHT_SIZE * 3.0 + TRAFFIC_LIGHT_SPACING * 4.0;
+    let box_height = TRAFFIC_LIGHT_SIZE * 2.0 + TRAFFIC_LIGHT_SPACING * 3.0;
 
     // Draw dark housing box
     draw_rectangle(x, y, box_width, box_height, BOX_COLOR);
@@ -729,25 +770,16 @@ pub fn draw_traffic_light(x: f32, y: f32, active_light: u8) {
 
     // RED light (top)
     let red_y = y + TRAFFIC_LIGHT_SPACING + radius;
-    let red_color = if active_light == 0 {
+    let red_color = if display_state == 0 {
         RED_BRIGHT
     } else {
         RED_DIM
     };
     draw_circle(light_x, red_y, radius, red_color);
 
-    // YELLOW light (middle)
-    let yellow_y = red_y + TRAFFIC_LIGHT_SIZE + TRAFFIC_LIGHT_SPACING;
-    let yellow_color = if active_light == 1 {
-        YELLOW_BRIGHT
-    } else {
-        YELLOW_DIM
-    };
-    draw_circle(light_x, yellow_y, radius, yellow_color);
-
     // GREEN light (bottom)
-    let green_y = yellow_y + TRAFFIC_LIGHT_SIZE + TRAFFIC_LIGHT_SPACING;
-    let green_color = if active_light == 2 {
+    let green_y = red_y + TRAFFIC_LIGHT_SIZE + TRAFFIC_LIGHT_SPACING;
+    let green_color = if display_state == 2 {
         GREEN_BRIGHT
     } else {
         GREEN_DIM

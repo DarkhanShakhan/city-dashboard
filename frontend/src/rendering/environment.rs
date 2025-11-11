@@ -6,6 +6,7 @@ use crate::constants::{
     visual::*,
 };
 use crate::intersection::Intersection;
+use crate::rendering::draw_rounded_rectangle;
 use macroquad::prelude::*;
 
 /// Draws intersection markings and crosswalks
@@ -150,8 +151,8 @@ pub fn draw_grass_blocks() {
             let width = x_boundaries[i + 1] - x;
             let height = y_boundaries[j + 1] - y;
 
-            // Draw grass block
-            draw_rectangle(x, y, width, height, GRASS_COLOR);
+            // Draw grass block with rounded corners
+            draw_rounded_rectangle(x, y, width, height, BLOCK_CORNER_RADIUS, GRASS_COLOR);
 
             // Add depth edge for 2.5D effect
             draw_rectangle(

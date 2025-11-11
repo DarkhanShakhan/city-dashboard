@@ -8,8 +8,9 @@
 //! - BlockObject: Trait for things that can be rendered (Grass, Building, etc.)
 //! - Grass, Building, etc.: Concrete implementations of BlockObject
 
-use crate::constants::visual::{DEPTH_OFFSET, GRASS_COLOR, GRASS_DEPTH_COLOR};
+use crate::constants::visual::{BLOCK_CORNER_RADIUS, DEPTH_OFFSET, GRASS_COLOR, GRASS_DEPTH_COLOR};
 use crate::models::Direction;
+use crate::rendering::draw_rounded_rectangle;
 use macroquad::prelude::*;
 use std::collections::HashMap;
 
@@ -472,8 +473,8 @@ impl BlockObject for Grass {
         let width = self.width_percent * block_width;
         let height = self.height_percent * block_height;
 
-        // Draw main grass rectangle
-        draw_rectangle(x, y, width, height, GRASS_COLOR);
+        // Draw main grass rectangle with rounded corners
+        draw_rounded_rectangle(x, y, width, height, BLOCK_CORNER_RADIUS, GRASS_COLOR);
 
         // Add depth edge on right side for 2.5D effect
         draw_rectangle(x + width, y, DEPTH_OFFSET, height, GRASS_DEPTH_COLOR);

@@ -25,6 +25,9 @@ pub mod visual {
     /// 2.5D depth effect offset in pixels
     pub const DEPTH_OFFSET: f32 = 5.0;
 
+    /// Corner radius for rounded blocks in pixels
+    pub const BLOCK_CORNER_RADIUS: f32 = 8.0;
+
     /// Yellow-white color for road center lines
     pub const LINE_COLOR: Color = Color::new(1.0, 1.0, 0.8, 1.0);
 

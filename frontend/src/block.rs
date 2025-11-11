@@ -14,6 +14,28 @@ use macroquad::prelude::*;
 use std::collections::HashMap;
 
 // ============================================================================
+// Render Context
+// ============================================================================
+
+/// Context passed to block objects during rendering
+///
+/// Contains global state that objects may need to render differently
+#[derive(Clone, Debug)]
+pub struct RenderContext {
+    /// Current simulation time
+    pub time: f64,
+
+    /// Danger mode active (emergency warning state)
+    pub danger_mode: bool,
+}
+
+impl RenderContext {
+    pub fn new(time: f64, danger_mode: bool) -> Self {
+        Self { time, danger_mode }
+    }
+}
+
+// ============================================================================
 // Block Object Trait
 // ============================================================================
 
@@ -26,7 +48,8 @@ pub trait BlockObject {
     ///
     /// # Arguments
     /// * `block` - Reference to the block this object is being rendered in
-    fn render(&self, block: &Block);
+    /// * `context` - Rendering context with global state
+    fn render(&self, block: &Block, context: &RenderContext);
 }
 
 // ============================================================================
@@ -145,9 +168,12 @@ impl Block {
     }
 
     /// Renders all objects contained in this block
-    pub fn render(&self) {
+    ///
+    /// # Arguments
+    /// * `context` - Rendering context with global state (time, danger_mode, etc.)
+    pub fn render(&self, context: &RenderContext) {
         for obj in &self.objects {
-            obj.render(self);
+            obj.render(self, context);
         }
     }
 
@@ -433,7 +459,7 @@ impl Grass {
 }
 
 impl BlockObject for Grass {
-    fn render(&self, block: &Block) {
+    fn render(&self, block: &Block, _context: &RenderContext) {
         // Get block position and size in pixels
         let block_x = block.x();
         let block_y = block.y();

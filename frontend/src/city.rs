@@ -128,9 +128,12 @@ impl City {
     /// Renders all blocks in the city
     ///
     /// This will render all objects contained in each block.
-    pub fn render_blocks(&self) {
+    ///
+    /// # Arguments
+    /// * `context` - Rendering context with global state
+    pub fn render_blocks(&self, context: &crate::block::RenderContext) {
         for block in self.blocks.values() {
-            block.render();
+            block.render(context);
         }
     }
 
@@ -359,13 +362,17 @@ impl City {
     /// * `time` - Current simulation time for animations
     /// * `danger_mode` - If true, shows "DANGER" on LED display in red
     pub fn render_overlays(&self, time: f64, danger_mode: bool) {
-        use crate::rendering::{draw_guarded_building, draw_led_display};
+        use crate::block::RenderContext;
+        use crate::rendering::draw_guarded_building;
 
         // Note: draw_guarded_building is currently empty but kept for future use
         draw_guarded_building(time, &self.cars);
 
-        // LED display with scrolling text or danger warning
-        draw_led_display(time, danger_mode);
+        // Create render context with current state
+        let context = RenderContext::new(time, danger_mode);
+
+        // Render all blocks and their objects (including LED displays)
+        self.render_blocks(&context);
     }
 
     // ========================================================================

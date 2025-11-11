@@ -7,6 +7,7 @@ mod constants;
 mod input;
 mod intersection;
 mod led_chars;
+mod led_display_object;
 mod models;
 mod rendering;
 mod road;
@@ -39,6 +40,32 @@ async fn main() -> Result<(), macroquad::Error> {
     for intersection in intersections {
         city.add_intersection(intersection);
     }
+
+    // Create block with LED display (second block in first row)
+    // This block is between the first and second vertical roads, in the top row
+    use block::Block;
+    use led_display_object::LEDDisplay;
+    use constants::road_network::{VERTICAL_ROAD_POSITIONS, HORIZONTAL_ROAD_POSITIONS};
+    use constants::visual::ROAD_WIDTH;
+
+    let v1 = VERTICAL_ROAD_POSITIONS[0];
+    let v2 = VERTICAL_ROAD_POSITIONS[1];
+    let h1 = HORIZONTAL_ROAD_POSITIONS[0];
+
+    let block_x = v1 + (ROAD_WIDTH / 2.0) / screen_width();
+    let block_y = 0.0;
+    let block_width = v2 - (ROAD_WIDTH / 2.0) / screen_width() - block_x;
+    let block_height = h1 - (ROAD_WIDTH / 2.0) / screen_height();
+
+    let mut display_block = Block::new(block_x, block_y, block_width, block_height, 0);
+
+    // Add LED display to the block
+    let led = LEDDisplay::new("  WELCOME TO CITY  ")
+        .with_position(0.1, 0.3)
+        .with_size(0.8, 0.4);
+    display_block.add_object(Box::new(led));
+
+    city.add_block(display_block);
 
     // Initialize window state tracking
     let mut window_state = WindowState::new();

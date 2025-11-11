@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -75,21 +75,17 @@ jobs:
         run: |
           curl -o dist/gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v3
+        uses: actions/deploy-pages@v4
 ```
 
 ## Setup Steps

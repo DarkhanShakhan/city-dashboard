@@ -713,20 +713,17 @@ pub fn get_traffic_light_state(time_offset: f32) -> u8 {
 
 /// Renders a single traffic light at the specified position
 ///
-/// Draws a vertical traffic light with two stacked circular lights:
-/// red (top) and green (bottom), with a dark box housing
+/// Draws a vertical traffic light with three stacked circular lights:
+/// red (top), yellow (middle), green (bottom), with a dark box housing
 /// and small pole underneath.
 ///
 /// # Arguments
 /// * `x` - X position for top-left corner of light box
 /// * `y` - Y position for top-left corner of light box
-/// * `active_light` - Which light is currently on (0=red, 1=yellow (shown as red), 2=green)
+/// * `active_light` - Which light is currently on (0=red, 1=yellow, 2=green)
 pub fn draw_traffic_light(x: f32, y: f32, active_light: u8) {
-    // Treat yellow as red for display (only show 2 colors)
-    let display_state = if active_light == 1 { 0 } else { active_light };
-
     let box_width = TRAFFIC_LIGHT_SIZE + 6.0;
-    let box_height = TRAFFIC_LIGHT_SIZE * 2.0 + TRAFFIC_LIGHT_SPACING * 3.0;
+    let box_height = TRAFFIC_LIGHT_SIZE * 3.0 + TRAFFIC_LIGHT_SPACING * 4.0;
 
     // Draw dark housing box
     draw_rectangle(x, y, box_width, box_height, BOX_COLOR);
@@ -770,16 +767,25 @@ pub fn draw_traffic_light(x: f32, y: f32, active_light: u8) {
 
     // RED light (top)
     let red_y = y + TRAFFIC_LIGHT_SPACING + radius;
-    let red_color = if display_state == 0 {
+    let red_color = if active_light == 0 {
         RED_BRIGHT
     } else {
         RED_DIM
     };
     draw_circle(light_x, red_y, radius, red_color);
 
+    // YELLOW light (middle)
+    let yellow_y = red_y + TRAFFIC_LIGHT_SIZE + TRAFFIC_LIGHT_SPACING;
+    let yellow_color = if active_light == 1 {
+        YELLOW_BRIGHT
+    } else {
+        YELLOW_DIM
+    };
+    draw_circle(light_x, yellow_y, radius, yellow_color);
+
     // GREEN light (bottom)
-    let green_y = red_y + TRAFFIC_LIGHT_SIZE + TRAFFIC_LIGHT_SPACING;
-    let green_color = if display_state == 2 {
+    let green_y = yellow_y + TRAFFIC_LIGHT_SIZE + TRAFFIC_LIGHT_SPACING;
+    let green_color = if active_light == 2 {
         GREEN_BRIGHT
     } else {
         GREEN_DIM

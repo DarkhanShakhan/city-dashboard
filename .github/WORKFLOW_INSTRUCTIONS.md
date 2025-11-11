@@ -35,21 +35,25 @@ jobs:
           target: wasm32-unknown-unknown
           override: true
 
-      - name: Build
+      - name: Build WASM
         run: |
           cd frontend
           cargo build --release --target wasm32-unknown-unknown
 
-      - name: Download Macroquad JS glue
+      - name: List build artifacts (debug)
         run: |
-          curl -o gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
+          echo "Listing frontend/target/wasm32-unknown-unknown/release/:"
+          ls -lah frontend/target/wasm32-unknown-unknown/release/ || echo "Directory not found"
 
       - name: Prepare Deployment Directory
         run: |
-          mkdir -p ./deploy
-          cp ./frontend/target/wasm32-unknown-unknown/release/frontend.wasm ./deploy/
-          cp ./frontend/index.html ./deploy/
-          cp gl.js ./deploy/
+          mkdir -p deploy
+          cp frontend/target/wasm32-unknown-unknown/release/frontend.wasm deploy/
+          cp frontend/index.html deploy/
+
+      - name: Download Macroquad JS glue
+        run: |
+          curl -o deploy/gl.js https://raw.githubusercontent.com/not-fl3/macroquad/master/js/gl.js
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

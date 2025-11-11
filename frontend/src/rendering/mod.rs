@@ -16,8 +16,10 @@ mod environment;
 pub mod led_display;  // Make public for led_display_object
 mod roads;
 mod vehicles;
+mod utils;
 
 // Re-export public API
 pub use environment::{draw_grass_blocks, draw_intersection_markings};
 pub use roads::draw_road_lines;
 pub use vehicles::{draw_car, draw_guarded_building};
+pub use utils::draw_rounded_rectangle;

@@ -8,7 +8,7 @@
 use crate::constants::road_network::{HORIZONTAL_ROAD_POSITIONS, VERTICAL_ROAD_POSITIONS};
 use crate::constants::rendering::INTERSECTION_SIZE;
 use crate::models::Direction;
-use crate::traffic_light::{LightState, TrafficLight};
+use crate::traffic_light::IntersectionTrafficLight;
 use macroquad::prelude::*;
 use std::collections::HashMap;
 
@@ -19,7 +19,7 @@ use std::collections::HashMap;
 /// Represents a road intersection with traffic lights
 ///
 /// Intersections are positioned at grid points where roads cross.
-/// Each intersection manages its own traffic lights and connections to roads.
+/// Each intersection manages its own traffic light controller and connections to roads.
 #[derive(Clone)]
 pub struct Intersection {
     /// Horizontal position as percentage of screen width
@@ -31,8 +31,8 @@ pub struct Intersection {
     /// Unique identifier for this intersection
     pub id: usize,
 
-    /// Traffic lights at this intersection
-    pub lights: Vec<crate::traffic_light::TrafficLight>,
+    /// Unified traffic light controller for this intersection
+    pub light: Option<IntersectionTrafficLight>,
 
     /// Roads connected to this intersection (direction -> road_id)
     pub connected_roads: HashMap<Direction, usize>,
@@ -50,7 +50,7 @@ impl Intersection {
             x_percent,
             y_percent,
             id,
-            lights: Vec::new(),
+            light: None,
             connected_roads: HashMap::new(),
         }
     }
@@ -71,25 +71,25 @@ impl Intersection {
         self.y_percent * screen_height()
     }
 
-    /// Adds a traffic light to this intersection
+    /// Sets the traffic light controller for this intersection
     ///
     /// # Arguments
-    /// * `light` - The traffic light to add
-    pub fn add_light(&mut self, light: crate::traffic_light::TrafficLight) {
-        self.lights.push(light);
+    /// * `light` - The intersection traffic light controller
+    pub fn set_light(&mut self, light: IntersectionTrafficLight) {
+        self.light = Some(light);
     }
 
-    /// Updates all traffic lights at this intersection
+    /// Updates the traffic light at this intersection
     ///
     /// # Arguments
     /// * `dt` - Delta time in seconds
     pub fn update_lights(&mut self, dt: f32) {
-        for light in &mut self.lights {
+        if let Some(light) = &mut self.light {
             light.update(dt);
         }
     }
 
-    /// Renders all traffic lights at this intersection
+    /// Renders the traffic lights at this intersection
     ///
     /// Traffic lights are positioned relative to the intersection center:
     /// - Vertical lights (up/down): top-right corner
@@ -98,40 +98,19 @@ impl Intersection {
     /// # Arguments
     /// * `force_red` - If true, forces all lights to show red (emergency mode)
     pub fn render_lights(&self, force_red: bool) {
-        const ROAD_WIDTH: f32 = 60.0;
-        let offset = ROAD_WIDTH / 2.0 + 10.0;
-
-        let int_x = self.x();
-        let int_y = self.y();
-
-        for light in &self.lights {
-            // Determine position based on whether light controls vertical or horizontal traffic
-            let (x, y) = if light.controls_vertical {
-                // Vertical traffic light (top-right corner)
-                (int_x + offset, int_y - offset - 60.0)
-            } else {
-                // Horizontal traffic light (bottom-left corner)
-                (int_x - offset - 20.0, int_y + offset + 5.0)
-            };
-
-            let state = if force_red {
-                0
-            } else {
-                light.get_state_u8()
-            };
-
-            crate::traffic_light::draw_traffic_light(x, y, state);
+        if let Some(light) = &self.light {
+            light.render(force_red);
         }
     }
 
-    /// Gets the number of traffic lights at this intersection
-    pub fn light_count(&self) -> usize {
-        self.lights.len()
+    /// Checks if this intersection has a traffic light
+    pub fn has_light(&self) -> bool {
+        self.light.is_some()
     }
 
-    /// Clears all traffic lights from this intersection
-    pub fn clear_lights(&mut self) {
-        self.lights.clear();
+    /// Clears the traffic light from this intersection
+    pub fn clear_light(&mut self) {
+        self.light = None;
     }
 
     /// Checks if a point (in pixels) is inside this intersection
@@ -171,7 +150,7 @@ impl Intersection {
         self.connected_roads.get(&direction).copied()
     }
 
-    /// Checks if traffic light is red for a given direction
+    /// Gets the traffic light state for a given direction
     ///
     /// # Arguments
     /// * `direction` - Direction of travel (Down/Up for vertical, Left/Right for horizontal)
@@ -179,18 +158,12 @@ impl Intersection {
     /// # Returns
     /// Traffic light state: 0 = red, 1 = yellow, 2 = green
     pub fn get_light_state_for_direction(&self, direction: Direction) -> u8 {
-        // Determine if direction is vertical or horizontal
-        let is_vertical = direction == Direction::Down || direction == Direction::Up;
-
-        // Find the appropriate light
-        for light in &self.lights {
-            if light.controls_vertical == is_vertical {
-                return light.get_state_u8();
-            }
+        if let Some(light) = &self.light {
+            light.get_state_for_direction(direction)
+        } else {
+            // Default to red if no light found
+            0
         }
-
-        // Default to red if no light found
-        0
     }
 }
 
@@ -245,39 +218,21 @@ pub fn generate_intersections() -> Vec<Intersection> {
     let mut intersections = Vec::new();
     let mut id = 0;
 
-    // Create intersection at each grid point with traffic lights
+    // Create intersection at each grid point with unified traffic light
     for &x_percent in &vertical_percents {
         for &y_percent in &horizontal_percents {
             let mut intersection = Intersection::new(x_percent, y_percent, id);
 
-            // Add vertical traffic light (controls up/down traffic)
-            // Start with green for even IDs, red for odd IDs (creates staggering)
-            let vertical_light = TrafficLight::builder(id * 2)
-                .position(x_percent, y_percent)
-                .vertical()
-                .direction(Direction::Down)
-                .initial_state(if id % 2 == 0 {
-                    LightState::Green(3.0)
-                } else {
-                    LightState::Red(3.0)
-                })
-                .build();
+            // Create unified traffic light controller
+            // Start with vertical green for even IDs, horizontal green for odd IDs (creates staggering)
+            let light = IntersectionTrafficLight::new(
+                x_percent,
+                y_percent,
+                id,
+                id % 2 == 0, // vertical_starts_green
+            );
 
-            // Add horizontal traffic light (controls left/right traffic)
-            // Opposite state from vertical light
-            let horizontal_light = TrafficLight::builder(id * 2 + 1)
-                .position(x_percent, y_percent)
-                .horizontal()
-                .direction(Direction::Right)
-                .initial_state(if id % 2 == 0 {
-                    LightState::Red(3.0)
-                } else {
-                    LightState::Green(3.0)
-                })
-                .build();
-
-            intersection.add_light(vertical_light);
-            intersection.add_light(horizontal_light);
+            intersection.set_light(light);
 
             intersections.push(intersection);
             id += 1;

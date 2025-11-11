@@ -12,7 +12,6 @@
 //! - Bottom-left: Controls horizontal (east-west) traffic
 
 use crate::constants::traffic_light::*;
-use crate::constants::visual::ROAD_WIDTH;
 use crate::intersection::Intersection;
 use crate::models::Direction;
 use macroquad::prelude::*;
@@ -289,34 +288,165 @@ impl TrafficLight {
 
         draw_traffic_light(self.x(), self.y(), state);
     }
+}
 
-    /// Renders traffic lights for an intersection
-    ///
-    /// This is a convenience method that renders both vertical and horizontal
-    /// traffic lights at the standard positions relative to an intersection.
+// ============================================================================
+// Intersection Traffic Light (Unified Controller)
+// ============================================================================
+
+/// Unified traffic light controller for an intersection
+///
+/// This struct manages both vertical and horizontal traffic lights at a single
+/// intersection, ensuring they are always properly coordinated (when one is green,
+/// the perpendicular direction is red).
+#[derive(Clone)]
+pub struct IntersectionTrafficLight {
+    /// Horizontal position as percentage of screen width
+    pub x_percent: f32,
+
+    /// Vertical position as percentage of screen height
+    pub y_percent: f32,
+
+    /// Current state for vertical traffic (up/down)
+    pub vertical_state: LightState,
+
+    /// Current state for horizontal traffic (left/right)
+    pub horizontal_state: LightState,
+
+    /// Time remaining in current state (in seconds)
+    pub time_in_state: f32,
+
+    /// Unique identifier
+    pub id: usize,
+}
+
+impl IntersectionTrafficLight {
+    /// Creates a new intersection traffic light
     ///
     /// # Arguments
-    /// * `intersection` - The intersection to render lights for
-    /// * `vertical_light` - The traffic light controlling vertical (up/down) traffic
-    /// * `horizontal_light` - The traffic light controlling horizontal (left/right) traffic
+    /// * `x_percent` - X position as percentage (0.0-1.0)
+    /// * `y_percent` - Y position as percentage (0.0-1.0)
+    /// * `id` - Unique identifier
+    /// * `vertical_starts_green` - If true, vertical starts green (horizontal red), else opposite
+    pub fn new(
+        x_percent: f32,
+        y_percent: f32,
+        id: usize,
+        vertical_starts_green: bool,
+    ) -> Self {
+        let (vertical_state, horizontal_state) = if vertical_starts_green {
+            (LightState::default_green(), LightState::default_red())
+        } else {
+            (LightState::default_red(), LightState::default_green())
+        };
+
+        Self {
+            x_percent,
+            y_percent,
+            vertical_state,
+            horizontal_state,
+            time_in_state: vertical_state.duration(),
+            id,
+        }
+    }
+
+    /// Converts the percentage-based x position to absolute pixels
+    pub fn x(&self) -> f32 {
+        self.x_percent * screen_width()
+    }
+
+    /// Converts the percentage-based y position to absolute pixels
+    pub fn y(&self) -> f32 {
+        self.y_percent * screen_height()
+    }
+
+    /// Updates the traffic light states based on elapsed time
+    ///
+    /// Automatically keeps vertical and horizontal lights coordinated.
+    ///
+    /// # Arguments
+    /// * `dt` - Delta time (time since last frame in seconds)
+    pub fn update(&mut self, dt: f32) {
+        self.time_in_state -= dt;
+
+        // Check if it's time to transition to next state
+        if self.time_in_state <= 0.0 {
+            // Transition both lights to their next states
+            self.vertical_state = self.get_next_state(self.vertical_state);
+            self.horizontal_state = self.get_opposite_state(self.vertical_state);
+            self.time_in_state = self.vertical_state.duration();
+        }
+    }
+
+    /// Gets the next state in the cycle
+    fn get_next_state(&self, current: LightState) -> LightState {
+        match current {
+            LightState::Green(_) => LightState::Yellow(YELLOW_DURATION),
+            LightState::Yellow(_) => LightState::Red(RED_DURATION),
+            LightState::Red(_) => LightState::Green(GREEN_DURATION),
+        }
+    }
+
+    /// Gets the opposite/complementary state for perpendicular traffic
+    fn get_opposite_state(&self, state: LightState) -> LightState {
+        match state {
+            LightState::Green(_) => LightState::Red(RED_DURATION),
+            LightState::Yellow(_) => LightState::Red(RED_DURATION),
+            LightState::Red(_) => {
+                // When one direction turns red, the other goes green
+                // But need to check if we're coming from yellow
+                if self.horizontal_state.is_red() {
+                    LightState::Green(GREEN_DURATION)
+                } else {
+                    LightState::Red(RED_DURATION)
+                }
+            }
+        }
+    }
+
+    /// Gets the state for a specific direction
+    ///
+    /// # Arguments
+    /// * `direction` - Direction of travel
+    ///
+    /// # Returns
+    /// Light state as u8: 0=red, 1=yellow, 2=green
+    pub fn get_state_for_direction(&self, direction: Direction) -> u8 {
+        let is_vertical = direction == Direction::Down || direction == Direction::Up;
+        let state = if is_vertical {
+            self.vertical_state
+        } else {
+            self.horizontal_state
+        };
+        state.to_u8()
+    }
+
+    /// Gets the vertical light state
+    pub fn get_vertical_state(&self) -> u8 {
+        self.vertical_state.to_u8()
+    }
+
+    /// Gets the horizontal light state
+    pub fn get_horizontal_state(&self) -> u8 {
+        self.horizontal_state.to_u8()
+    }
+
+    /// Renders both traffic lights for this intersection
+    ///
+    /// # Arguments
     /// * `force_red` - If true, forces all lights to show red (emergency mode)
-    pub fn render_for_intersection(
-        intersection: &Intersection,
-        vertical_light: &TrafficLight,
-        horizontal_light: &TrafficLight,
-        force_red: bool,
-    ) {
+    pub fn render(&self, force_red: bool) {
         const ROAD_WIDTH: f32 = 60.0;
         let offset = ROAD_WIDTH / 2.0 + 10.0;
 
-        let int_x = intersection.x();
-        let int_y = intersection.y();
+        let int_x = self.x();
+        let int_y = self.y();
 
         // Vertical traffic light (top-right corner)
         let v_state = if force_red {
             0
         } else {
-            vertical_light.get_state_u8()
+            self.get_vertical_state()
         };
         draw_traffic_light(int_x + offset, int_y - offset - 60.0, v_state);
 
@@ -324,7 +454,7 @@ impl TrafficLight {
         let h_state = if force_red {
             0
         } else {
-            horizontal_light.get_state_u8()
+            self.get_horizontal_state()
         };
         draw_traffic_light(int_x - offset - 20.0, int_y + offset + 5.0, h_state);
     }
@@ -631,47 +761,13 @@ pub fn draw_traffic_light(x: f32, y: f32, active_light: u8) {
 /// - Top-right corner: Controls north-south (vertical) traffic
 /// - Bottom-left corner: Controls east-west (horizontal) traffic
 ///
-/// Lights are offset by half a cycle so when vertical is green,
-/// horizontal is red, and vice versa.
+/// Lights are coordinated so when vertical is green, horizontal is red, and vice versa.
 ///
 /// # Arguments
 /// * `intersections` - All intersections to draw lights at
 /// * `all_lights_red` - Emergency mode flag (forces all lights to red)
 pub fn draw_traffic_lights(intersections: &[Intersection], all_lights_red: bool) {
-    // Distance from intersection center to place traffic lights
-    let offset = ROAD_WIDTH / 2.0 + 10.0;
-
     for intersection in intersections {
-        let int_x = intersection.x();
-        let int_y = intersection.y();
-
-        // Calculate vertical light state (for north-south traffic)
-        let vertical_light_state = if all_lights_red {
-            0 // Force red in emergency mode
-        } else {
-            intersection.get_light_state_for_direction(Direction::Down)
-        };
-
-        // Calculate horizontal light state (for east-west traffic)
-        // Offset by half cycle so it alternates with vertical
-        let horizontal_light_state = if all_lights_red {
-            0 // Force red in emergency mode
-        } else {
-            intersection.get_light_state_for_direction(Direction::Right)
-        };
-
-        // Vertical traffic light (top-right corner)
-        draw_traffic_light(
-            int_x + offset,
-            int_y - offset - 60.0,
-            vertical_light_state,
-        );
-
-        // Horizontal traffic light (bottom-left corner)
-        draw_traffic_light(
-            int_x - offset - 20.0,
-            int_y + offset + 5.0,
-            horizontal_light_state,
-        );
+        intersection.render_lights(all_lights_red);
     }
 }

@@ -638,14 +638,6 @@ impl Building {
     }
 }
 
-/// Helper function to draw a parallelogram using two triangles
-fn draw_parallelogram(p1: Vec2, p2: Vec2, p3: Vec2, p4: Vec2, color: macroquad::prelude::Color) {
-    use macroquad::prelude::*;
-    // Draw two triangles to form a parallelogram
-    draw_triangle(p1, p2, p3, color);
-    draw_triangle(p1, p3, p4, color);
-}
-
 impl BlockObject for Building {
     fn render(&self, block: &Block, _context: &RenderContext) {
         use macroquad::prelude::*;
@@ -686,22 +678,21 @@ impl BlockObject for Building {
         );
 
         // Draw right side face (angled to the right for perspective)
-        draw_parallelogram(
-            Vec2::new(x + width, top_y),           // Top right of front
-            Vec2::new(x + width + depth, top_y),   // Top right angled right
-            Vec2::new(x + width + depth, base_y),  // Bottom right angled right
-            Vec2::new(x + width, base_y),          // Bottom right of front
-            side_color,
-        );
+        // Using triangles since draw_affine_parallelogram is for textures
+        let side_p1 = Vec2::new(x + width, top_y);
+        let side_p2 = Vec2::new(x + width + depth, top_y);
+        let side_p3 = Vec2::new(x + width + depth, base_y);
+        let side_p4 = Vec2::new(x + width, base_y);
+        draw_triangle(side_p1, side_p2, side_p3, side_color);
+        draw_triangle(side_p1, side_p3, side_p4, side_color);
 
         // Draw top face as a parallelogram (not rounded, angled to match sides)
-        draw_parallelogram(
-            Vec2::new(x, top_y),                   // Front left
-            Vec2::new(x + width, top_y),           // Front right
-            Vec2::new(x + width + depth, top_y),   // Back right (angled right)
-            Vec2::new(x + depth, top_y),           // Back left (angled right)
-            top_color,
-        );
+        let top_p1 = Vec2::new(x, top_y);
+        let top_p2 = Vec2::new(x + width, top_y);
+        let top_p3 = Vec2::new(x + width + depth, top_y);
+        let top_p4 = Vec2::new(x + depth, top_y);
+        draw_triangle(top_p1, top_p2, top_p3, top_color);
+        draw_triangle(top_p1, top_p3, top_p4, top_color);
 
         // Draw front face with rounded corners
         draw_rounded_rectangle(x, top_y, width, cube_height, BLOCK_CORNER_RADIUS, front_color);

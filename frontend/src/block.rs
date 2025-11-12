@@ -677,24 +677,15 @@ impl BlockObject for Building {
             1.0,
         );
 
-        // Draw right side face (darker)
+        // Draw right side face (connects rectangular top to base)
+        // Right side connects from right edge of top to right edge extended at base
         let side_points = vec![
-            Vec2::new(x + width, top_y),
-            Vec2::new(x + width + depth, top_y - depth),
-            Vec2::new(x + width + depth, base_y - depth),
-            Vec2::new(x + width, base_y),
+            Vec2::new(x + width, top_y),           // Top right
+            Vec2::new(x + width + depth, top_y),   // Top right + depth (same y)
+            Vec2::new(x + width + depth, base_y),  // Bottom right + depth
+            Vec2::new(x + width, base_y),          // Bottom right
         ];
-        for i in 0..side_points.len() {
-            let next = (i + 1) % side_points.len();
-            draw_line(
-                side_points[i].x,
-                side_points[i].y,
-                side_points[next].x,
-                side_points[next].y,
-                1.0,
-                side_color,
-            );
-        }
+
         // Fill the side
         draw_triangle(
             side_points[0],
@@ -709,40 +700,11 @@ impl BlockObject for Building {
             side_color,
         );
 
-        // Draw top face (lighter)
-        let top_points = vec![
-            Vec2::new(x, top_y),
-            Vec2::new(x + depth, top_y - depth),
-            Vec2::new(x + width + depth, top_y - depth),
-            Vec2::new(x + width, top_y),
-        ];
-        for i in 0..top_points.len() {
-            let next = (i + 1) % top_points.len();
-            draw_line(
-                top_points[i].x,
-                top_points[i].y,
-                top_points[next].x,
-                top_points[next].y,
-                1.0,
-                top_color,
-            );
-        }
-        // Fill the top
-        draw_triangle(
-            top_points[0],
-            top_points[1],
-            top_points[2],
-            top_color,
-        );
-        draw_triangle(
-            top_points[0],
-            top_points[2],
-            top_points[3],
-            top_color,
-        );
+        // Draw top face as a rectangle (not isometric)
+        draw_rounded_rectangle(x, top_y, width, depth, BLOCK_CORNER_RADIUS, top_color);
 
         // Draw front face with rounded corners
-        draw_rounded_rectangle(x, top_y, width, cube_height, BLOCK_CORNER_RADIUS, front_color);
+        draw_rounded_rectangle(x, top_y + depth, width, cube_height - depth, BLOCK_CORNER_RADIUS, front_color);
     }
 }
 

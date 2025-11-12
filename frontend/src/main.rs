@@ -8,6 +8,7 @@ mod input;
 mod intersection;
 mod led_chars;
 mod led_display_object;
+mod logging;
 mod models;
 mod rendering;
 mod road;
@@ -17,6 +18,7 @@ mod traffic_light;
 use city::City;
 use input::{handle_input, WindowState};
 use intersection::generate_intersections;
+use logging::LogWindow;
 
 // ============================================================================
 // Configuration Constants
@@ -88,10 +90,18 @@ async fn main() -> Result<(), macroquad::Error> {
     // Initialize window state tracking
     let mut window_state = WindowState::new();
 
+    // Initialize log window for critical events
+    let mut log_window = LogWindow::new(50); // Keep last 50 entries
+    log_window.log("City Dashboard initialized");
+
     // Initialize control modes
     let mut all_lights_red = false; // Emergency traffic stop mode
     let mut danger_mode = false;     // Danger warning on LED display
     let mut barrier_open = false;    // Barrier gate state (false = closed/down)
+
+    // Track previous states for event detection
+    let mut previous_all_lights_red = false;
+    let mut previous_danger_mode = false;
 
     // ========================================================================
     // Main Game Loop
@@ -110,20 +120,50 @@ async fn main() -> Result<(), macroquad::Error> {
         all_lights_red = new_all_lights_red;
         danger_mode = new_danger_mode;
 
+        // Handle log window toggle
+        if is_key_pressed(KeyCode::L) {
+            log_window.toggle_visibility();
+        }
+
+        // Log emergency traffic stop state changes
+        if all_lights_red && !previous_all_lights_red {
+            log_window.log("EMERGENCY: All traffic lights forced to RED");
+        } else if !all_lights_red && previous_all_lights_red {
+            log_window.log("Emergency traffic stop deactivated");
+        }
+
+        // Log danger mode state changes
+        if danger_mode && !previous_danger_mode {
+            log_window.log("LED Display: DANGER MODE ACTIVATED");
+        } else if !danger_mode && previous_danger_mode {
+            log_window.log("LED Display: Normal operation resumed");
+        }
+
         // Handle SCADA toggle for all buildings
         if toggle_scada {
             city.toggle_all_scada();
+            log_window.log("SCADA systems toggled on all buildings");
         }
 
         // Handle SCADA reset
         if reset_scada {
             city.reset_all_scada();
+            log_window.log("All SCADA systems reset to working state");
         }
 
         // Handle barrier toggle
         if toggle_barrier {
             barrier_open = !barrier_open;
+            if barrier_open {
+                log_window.log("Barrier gate OPENED");
+            } else {
+                log_window.log("Barrier gate CLOSED");
+            }
         }
+
+        // Update previous states for next frame
+        previous_all_lights_red = all_lights_red;
+        previous_danger_mode = danger_mode;
 
         // --------------------------------------------------------------------
         // Window Resize Handling
@@ -165,6 +205,9 @@ async fn main() -> Result<(), macroquad::Error> {
         city.render_environment(current_time, danger_mode, barrier_open);
         city.render_traffic(all_lights_red);
         city.render_overlays(current_time, danger_mode, barrier_open);
+
+        // Render log window overlay
+        log_window.render();
 
         // Present frame and wait for next
         next_frame().await;

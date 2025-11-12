@@ -77,7 +77,6 @@ pub fn generate_grass_blocks() -> Vec<Block> {
                     40.0,  // height: 40 pixels tall
                     0.3,   // depth: 30% of block height
                     8.0,   // corner_radius: 8 pixels
-                    true,  // has_fence: true
                     Color::new(0.5, 0.6, 0.7, 1.0), // Blue-gray building
                 )));
             }

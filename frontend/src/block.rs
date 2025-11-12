@@ -677,12 +677,12 @@ impl BlockObject for Building {
             1.0,
         );
 
-        // Draw right side face (angled to the left)
-        // Side goes from right edge of front to left, creating depth
+        // Draw right side face (angled to the right for perspective)
+        // Side goes from right edge of front to right, creating depth
         let side_points = vec![
             Vec2::new(x + width, top_y),           // Top right of front
-            Vec2::new(x + width - depth, top_y),   // Top right angled left
-            Vec2::new(x + width - depth, base_y),  // Bottom right angled left
+            Vec2::new(x + width + depth, top_y),   // Top right angled right
+            Vec2::new(x + width + depth, base_y),  // Bottom right angled right
             Vec2::new(x + width, base_y),          // Bottom right of front
         ];
 
@@ -704,8 +704,8 @@ impl BlockObject for Building {
         let top_points = vec![
             Vec2::new(x, top_y),                   // Front left
             Vec2::new(x + width, top_y),           // Front right
-            Vec2::new(x + width - depth, top_y),   // Back right (angled left)
-            Vec2::new(x - depth, top_y),           // Back left (angled left)
+            Vec2::new(x + width + depth, top_y),   // Back right (angled right)
+            Vec2::new(x + depth, top_y),           // Back left (angled right)
         ];
         draw_triangle(top_points[0], top_points[1], top_points[2], top_color);
         draw_triangle(top_points[0], top_points[2], top_points[3], top_color);

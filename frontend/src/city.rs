@@ -105,6 +105,67 @@ impl City {
         self.cars.push(car);
     }
 
+    /// Toggles SCADA broken state for a specific building by block ID
+    ///
+    /// # Arguments
+    /// * `block_id` - The ID of the block containing the building
+    pub fn toggle_scada_broken(&mut self, block_id: usize) {
+        if let Some(block) = self.blocks.get_mut(&block_id) {
+            // Try to find and toggle any Building objects in this block
+            for obj in &mut block.objects {
+                // Use downcast to check if this is a Building
+                if let Some(building) = obj.as_any_mut().downcast_mut::<crate::block::Building>() {
+                    if building.has_scada {
+                        building.set_scada_broken(!building.scada_broken);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sets SCADA broken state for a specific building by block ID
+    ///
+    /// # Arguments
+    /// * `block_id` - The ID of the block containing the building
+    /// * `broken` - Whether the SCADA should be broken
+    pub fn set_scada_broken(&mut self, block_id: usize, broken: bool) {
+        if let Some(block) = self.blocks.get_mut(&block_id) {
+            for obj in &mut block.objects {
+                if let Some(building) = obj.as_any_mut().downcast_mut::<crate::block::Building>() {
+                    if building.has_scada {
+                        building.set_scada_broken(broken);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Toggles SCADA broken state for ALL buildings with SCADA in the city
+    pub fn toggle_all_scada(&mut self) {
+        for block in self.blocks.values_mut() {
+            for obj in &mut block.objects {
+                if let Some(building) = obj.as_any_mut().downcast_mut::<crate::block::Building>() {
+                    if building.has_scada {
+                        building.set_scada_broken(!building.scada_broken);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Resets all SCADA systems to working state (not broken)
+    pub fn reset_all_scada(&mut self) {
+        for block in self.blocks.values_mut() {
+            for obj in &mut block.objects {
+                if let Some(building) = obj.as_any_mut().downcast_mut::<crate::block::Building>() {
+                    if building.has_scada {
+                        building.set_scada_broken(false);
+                    }
+                }
+            }
+        }
+    }
+
     /// Returns the number of roads in the city
     pub fn road_count(&self) -> usize {
         self.roads.len()
@@ -312,12 +373,17 @@ impl City {
     ///
     /// This should be called first in the rendering pipeline as it draws
     /// the background layer.
-    pub fn render_environment(&self) {
+    ///
+    /// # Arguments
+    /// * `time` - Current time for animations (needed for SCADA flashing and barrier animation)
+    /// * `danger_mode` - Whether danger mode is active
+    /// * `barrier_open` - Whether the barrier gate is in open state
+    pub fn render_environment(&self, time: f64, danger_mode: bool, barrier_open: bool) {
         use crate::block::RenderContext;
         use crate::rendering::{draw_intersection_markings, draw_road_lines};
 
-        // Render grass blocks (static, so time and danger_mode don't matter)
-        let context = RenderContext::new(0.0, false);
+        // Render grass blocks with time for SCADA animations and barrier control
+        let context = RenderContext::new(time, danger_mode, barrier_open);
         for block in self.blocks.values() {
             // Only render blocks with grass (not LED display block)
             if block.id != 0 {
@@ -370,7 +436,8 @@ impl City {
     /// # Arguments
     /// * `time` - Current simulation time for animations
     /// * `danger_mode` - If true, shows "DANGER" on LED display in red
-    pub fn render_overlays(&self, time: f64, danger_mode: bool) {
+    /// * `barrier_open` - Whether the barrier gate is in open state
+    pub fn render_overlays(&self, time: f64, danger_mode: bool, barrier_open: bool) {
         use crate::block::RenderContext;
         use crate::rendering::draw_guarded_building;
 
@@ -378,7 +445,7 @@ impl City {
         draw_guarded_building(time, &self.cars);
 
         // Create render context with current state
-        let context = RenderContext::new(time, danger_mode);
+        let context = RenderContext::new(time, danger_mode, barrier_open);
 
         // Render only LED display blocks (id 0)
         // Grass blocks are rendered in render_environment

@@ -18,9 +18,7 @@ pub mod visual {
 
     /// Forest green color for grass areas
     pub const GRASS_COLOR: Color = Color::new(0.13, 0.55, 0.13, 1.0);
-
-    /// Darker grass color for 2.5D depth edges
-    pub const GRASS_DEPTH_COLOR: Color = Color::new(0.1, 0.45, 0.1, 1.0);
+    pub const BLOCK_COLOR: Color = Color::new(0.5, 0.6, 0.7, 1.0);
 
     /// 2.5D depth effect offset in pixels
     pub const DEPTH_OFFSET: f32 = 5.0;

@@ -150,6 +150,10 @@ impl LEDDisplay {
 }
 
 impl BlockObject for LEDDisplay {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn render(&self, block: &Block, context: &crate::block::RenderContext) {
         // Calculate absolute position and size
         let block_x = block.x();

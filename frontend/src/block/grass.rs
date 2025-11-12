@@ -81,6 +81,10 @@ impl Grass {
 }
 
 impl BlockObject for Grass {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn render(&self, block: &Block, _context: &RenderContext) {
         // Get block position and size in pixels
         let block_x = block.x();

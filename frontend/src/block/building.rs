@@ -96,6 +96,12 @@ pub struct Building {
 
     /// Building color
     pub color: Color,
+
+    /// Whether this building has SCADA control
+    pub has_scada: bool,
+
+    /// Whether the SCADA system is broken (only relevant if has_scada is true)
+    pub scada_broken: bool,
 }
 
 impl Building {
@@ -126,7 +132,25 @@ impl Building {
             depth_percent,
             corner_radius,
             color,
+            has_scada: false,
+            scada_broken: false,
         }
+    }
+
+    /// Enables SCADA control for this building
+    pub fn with_scada(mut self, enabled: bool) -> Self {
+        self.has_scada = enabled;
+        self
+    }
+
+    /// Sets the SCADA broken state
+    pub fn set_scada_broken(&mut self, broken: bool) {
+        self.scada_broken = broken;
+    }
+
+    /// Gets whether SCADA is broken
+    pub fn is_scada_broken(&self) -> bool {
+        self.has_scada && self.scada_broken
     }
 
     /// Creates a Building object using the builder pattern
@@ -176,8 +200,8 @@ impl Building {
     }
 
     /// Renders the front face of the building
-    fn render_front_face(&self, params: &RenderParams) {
-        let color = self.get_face_color(BuildingFace::Front);
+    fn render_front_face(&self, params: &RenderParams, time: f64) {
+        let color = self.get_face_color_with_scada(BuildingFace::Front, time);
 
         // Lower triangle
         draw_triangle(
@@ -215,8 +239,8 @@ impl Building {
     }
 
     /// Renders the right side face of the building
-    fn render_side_face(&self, params: &RenderParams) {
-        let color = self.get_face_color(BuildingFace::Side);
+    fn render_side_face(&self, params: &RenderParams, time: f64) {
+        let color = self.get_face_color_with_scada(BuildingFace::Side, time);
 
         // Back triangle
         draw_triangle(
@@ -254,8 +278,8 @@ impl Building {
     }
 
     /// Renders the top face of the building
-    fn render_top_face(&self, params: &RenderParams) {
-        let color = self.get_face_color(BuildingFace::Top);
+    fn render_top_face(&self, params: &RenderParams, time: f64) {
+        let color = self.get_face_color_with_scada(BuildingFace::Top, time);
         draw_rounded_rectangle(
             params.x_top,
             params.y_top,
@@ -265,10 +289,42 @@ impl Building {
             color,
         );
     }
+
+    /// Gets the color for a face when SCADA is broken (flashing between original and red)
+    fn get_face_color_with_scada(&self, face: BuildingFace, time: f64) -> Color {
+        // DEBUG: Check if SCADA is broken
+        let is_broken = self.is_scada_broken();
+
+        if !is_broken {
+            return self.get_face_color(face);
+        }
+
+        // Flash at 1 Hz (1 flash per second) - slower and more visible
+        let flash_frequency = 1.0;
+        let flash_value = (time * flash_frequency * std::f64::consts::PI * 2.0).sin();
+
+        // When flash_value > 0, show red; when < 0, show original color
+        if flash_value > 0.0 {
+            // Bright red color, but keep the same shading for different faces
+            let base_red = Color::new(1.0, 0.0, 0.0, 1.0);
+            match face {
+                BuildingFace::Front => base_red,
+                BuildingFace::Side => darken_color(base_red, BUILDING_SIDE_DARKEN),
+                BuildingFace::Top => lighten_color(base_red, BUILDING_TOP_LIGHTEN),
+            }
+        } else {
+            // Original color
+            self.get_face_color(face)
+        }
+    }
 }
 
 impl BlockObject for Building {
-    fn render(&self, block: &Block, _context: &RenderContext) {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn render(&self, block: &Block, context: &RenderContext) {
         // Get block position and size in pixels
         let block_x = block.x();
         let block_y = block.y();
@@ -296,10 +352,10 @@ impl BlockObject for Building {
             depth,
         };
 
-        // Render all three visible faces
-        self.render_front_face(&params);
-        self.render_side_face(&params);
-        self.render_top_face(&params);
+        // Render all three visible faces (with SCADA flashing if broken)
+        self.render_front_face(&params, context.time);
+        self.render_side_face(&params, context.time);
+        self.render_top_face(&params, context.time);
     }
 }
 
@@ -340,6 +396,8 @@ pub struct BuildingBuilder {
     depth_percent: Option<f32>,
     corner_radius: Option<f32>,
     color: Option<Color>,
+    has_scada: Option<bool>,
+    scada_broken: Option<bool>,
 }
 
 impl BuildingBuilder {
@@ -353,6 +411,8 @@ impl BuildingBuilder {
             depth_percent: None,
             corner_radius: None,
             color: None,
+            has_scada: None,
+            scada_broken: None,
         }
     }
 
@@ -405,6 +465,18 @@ impl BuildingBuilder {
         self
     }
 
+    /// Sets whether the building has SCADA control
+    pub fn has_scada(mut self, has_scada: bool) -> Self {
+        self.has_scada = Some(has_scada);
+        self
+    }
+
+    /// Sets whether the SCADA is broken
+    pub fn scada_broken(mut self, broken: bool) -> Self {
+        self.scada_broken = Some(broken);
+        self
+    }
+
     /// Builds the Building object
     ///
     /// Uses default values if not set:
@@ -415,6 +487,8 @@ impl BuildingBuilder {
     /// - depth_percent: 0.3 (30% of block height)
     /// - corner_radius: 8.0 (8 pixel corner radius)
     /// - color: Gray (0.6, 0.6, 0.6, 1.0)
+    /// - has_scada: false
+    /// - scada_broken: false
     pub fn build(self) -> Building {
         Building {
             x_offset_percent: self.x_offset_percent.unwrap_or(0.0),
@@ -424,6 +498,8 @@ impl BuildingBuilder {
             depth_percent: self.depth_percent.unwrap_or(0.3),
             corner_radius: self.corner_radius.unwrap_or(BUILDING_CORNER_RADIUS),
             color: self.color.unwrap_or(Color::new(0.6, 0.6, 0.6, 1.0)),
+            has_scada: self.has_scada.unwrap_or(false),
+            scada_broken: self.scada_broken.unwrap_or(false),
         }
     }
 }

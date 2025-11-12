@@ -109,7 +109,7 @@ pub fn generate_grass_blocks() -> Vec<Block> {
                 // Smaller connected building (annex/wing)
                 block.add_object(Box::new(Building::new(
                     0.50, // x_offset: 45% from left (connected to the right side)
-                    0.50, // y_offset: 25% from top (slightly lower)
+                    0.35, // y_offset: 25% from top (slightly lower)
                     0.35, // width: 35% of block width
                     35.0, // height: 35 pixels tall (much shorter)
                     0.45, // depth: 45% of block height
@@ -145,9 +145,28 @@ pub fn generate_grass_blocks() -> Vec<Block> {
 
             // Block 12 - Modern complex: Two towers with connecting bridge effect
             if block_id == 12 {
+                block.add_object(Box::new(Building::new(
+                    0.30, // x_offset: 10% from left
+                    0.20, // y_offset: 20% from top (middle depth)
+                    0.25, // width: 25% of block width
+                    55.0, // height: 55 pixels tall
+                    0.45, // depth: 45% of block height
+                    5.0,  // corner_radius: 5 pixels
+                    building_color,
+                )));
+                // Connecting bridge/walkway - drawn last (closest to viewer)
+                block.add_object(Box::new(Building::new(
+                    0.55, // x_offset: 35% from left (between towers)
+                    0.35, // y_offset: 35% from top (closest to viewer)
+                    0.20, // width: 20% of block width (narrow)
+                    25.0, // height: 25 pixels tall (low bridge)
+                    0.30, // depth: 30% of block height
+                    3.0,  // corner_radius: 3 pixels
+                    building_color,
+                )));
                 // Right tower (slightly taller) - drawn first (furthest back)
                 block.add_object(Box::new(Building::new(
-                    0.55, // x_offset: 55% from left
+                    0.75, // x_offset: 55% from left
                     0.15, // y_offset: 15% from top (furthest back)
                     0.30, // width: 30% of block width
                     60.0, // height: 60 pixels tall
@@ -157,26 +176,6 @@ pub fn generate_grass_blocks() -> Vec<Block> {
                 )));
 
                 // Left tower - drawn second (middle depth)
-                block.add_object(Box::new(Building::new(
-                    0.10, // x_offset: 10% from left
-                    0.20, // y_offset: 20% from top (middle depth)
-                    0.25, // width: 25% of block width
-                    55.0, // height: 55 pixels tall
-                    0.45, // depth: 45% of block height
-                    5.0,  // corner_radius: 5 pixels
-                    building_color,
-                )));
-
-                // Connecting bridge/walkway - drawn last (closest to viewer)
-                block.add_object(Box::new(Building::new(
-                    0.35, // x_offset: 35% from left (between towers)
-                    0.35, // y_offset: 35% from top (closest to viewer)
-                    0.20, // width: 20% of block width (narrow)
-                    25.0, // height: 25 pixels tall (low bridge)
-                    0.30, // depth: 30% of block height
-                    3.0,  // corner_radius: 3 pixels
-                    building_color,
-                )));
             }
 
             // Block 5 - center of grid
@@ -196,22 +195,22 @@ pub fn generate_grass_blocks() -> Vec<Block> {
             if block_id == 8 {
                 // Add a fence on the top side with offsets from edges
                 block.add_object(Box::new(Fence::new(
-                    0.10,                           // x_offset: 10% from left edge
-                    0.10,                           // y_offset: 10% from top edge
-                    0.80, // width: 80% of block width (leaves 10% at left, 10% at right)
-                    0.01, // depth: 1% of block height
-                    6.0,  // height: 6 pixels tall
-                    Color::new(0.4, 0.3, 0.2, 1.0), // Brown fence
+                    0.10,           // x_offset: 10% from left edge
+                    0.10,           // y_offset: 10% from top edge
+                    0.80,           // width: 80% of block width (leaves 10% at left, 10% at right)
+                    0.01,           // depth: 1% of block height
+                    6.0,            // height: 6 pixels tall
+                    building_color, // Brown fence
                 )));
 
                 // Add a fence on the left side with offsets from edges
                 block.add_object(Box::new(Fence::new(
-                    0.10,                           // x_offset: 10% from left edge
+                    0.10, // x_offset: 10% from left edge
                     0.11, // y_offset: 11% from top edge (starts where top fence ends)
                     0.01, // width: 1% of block width
                     0.78, // depth: 78% (from 11% to 89%)
                     6.0,  // height: 6 pixels tall
-                    Color::new(0.4, 0.3, 0.2, 1.0), // Brown fence
+                    building_color,
                 )));
 
                 // Add a fence on the right side with offsets from edges
@@ -221,30 +220,56 @@ pub fn generate_grass_blocks() -> Vec<Block> {
                     0.01, // width: 1% of block width
                     0.78, // depth: 78% (from 11% to 89%)
                     6.0,  // height: 6 pixels tall
-                    Color::new(0.4, 0.3, 0.2, 1.0), // Brown fence
-                )));
-
-                // Add a fence on the bottom side with offsets from edges
-                block.add_object(Box::new(Fence::new(
-                    0.10,                           // x_offset: 10% from left edge
-                    0.89, // y_offset: 89% from top edge (leaves 10% + 1% height to reach bottom edge)
-                    0.80, // width: 80% of block width (leaves 10% at left, 10% at right)
-                    0.01, // depth: 1% of block height
-                    6.0,  // height: 6 pixels tall
-                    Color::new(0.4, 0.3, 0.2, 1.0), // Brown fence
-                )));
-
-                // Add building in the center of the block
-                // Positioned at 25% offset, sized to 50% of block dimensions
-                block.add_object(Box::new(Building::new(
-                    0.25, // x_offset: 25% from left
-                    0.25, // y_offset: 25% from top
-                    0.4,  // width: 40% of block width
-                    40.0, // height: 40 pixels tall
-                    0.3,  // depth: 30% of block height
-                    8.0,  // corner_radius: 8 pixels
                     building_color,
                 )));
+
+                // Add a fence on the bottom side - LEFT part (before barrier gap)
+                block.add_object(Box::new(Fence::new(
+                    0.10, // x_offset: 10% from left edge
+                    0.89, // y_offset: 89% from top edge
+                    0.35, // width: 35% of block width (leaves gap for barrier)
+                    0.01, // depth: 1% of block height
+                    6.0,  // height: 6 pixels tall
+                    building_color,
+                )));
+
+                // Add a fence on the bottom side - RIGHT part (after barrier gap)
+                block.add_object(Box::new(Fence::new(
+                    0.55, // x_offset: 55% from left edge (after gap)
+                    0.89, // y_offset: 89% from top edge
+                    0.35, // width: 35% of block width (leaves 10% at right)
+                    0.01, // depth: 1% of block height
+                    6.0,  // height: 6 pixels tall
+                    building_color,
+                )));
+
+                // Add barrier in the gap - boom arm spans from left to right fence
+                block.add_object(Box::new(
+                    Fence::new(
+                        0.45, // x_offset: 45% from left edge (gap start)
+                        0.89, // y_offset: 89% from top edge
+                        0.10, // width: 10% gap - boom arm will span this entire width
+                        0.01, // depth: 1% of block height
+                        6.0,  // height: 6 pixels tall (invisible, just for barrier mount)
+                        Color::new(0.0, 0.0, 0.0, 0.0), // Transparent fence
+                    )
+                    .with_barrier(0.0), // Barrier post at left edge, boom spans to right edge
+                ));
+
+                // Add building in the center of the block with SCADA control
+                // Positioned at 25% offset, sized to 50% of block dimensions
+                block.add_object(Box::new(
+                    Building::new(
+                        0.25, // x_offset: 25% from left
+                        0.25, // y_offset: 25% from top
+                        0.4,  // width: 40% of block width
+                        40.0, // height: 40 pixels tall
+                        0.3,  // depth: 30% of block height
+                        8.0,  // corner_radius: 8 pixels
+                        building_color,
+                    )
+                    .with_scada(true), // Enable SCADA for this building
+                ));
             }
 
             // Block 7 - top row, third column

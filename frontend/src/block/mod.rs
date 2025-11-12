@@ -36,11 +36,14 @@ pub struct RenderContext {
 
     /// Danger mode active (emergency warning state)
     pub danger_mode: bool,
+
+    /// Barrier gate state (true = open, false = closed)
+    pub barrier_open: bool,
 }
 
 impl RenderContext {
-    pub fn new(time: f64, danger_mode: bool) -> Self {
-        Self { time, danger_mode }
+    pub fn new(time: f64, danger_mode: bool, barrier_open: bool) -> Self {
+        Self { time, danger_mode, barrier_open }
     }
 }
 
@@ -59,6 +62,9 @@ pub trait BlockObject {
     /// * `block` - Reference to the block this object is being rendered in
     /// * `context` - Rendering context with global state
     fn render(&self, block: &Block, context: &RenderContext);
+
+    /// Enables downcasting to concrete types (mutable)
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 // ============================================================================

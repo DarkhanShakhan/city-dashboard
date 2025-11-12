@@ -91,6 +91,7 @@ async fn main() -> Result<(), macroquad::Error> {
     // Initialize control modes
     let mut all_lights_red = false; // Emergency traffic stop mode
     let mut danger_mode = false;     // Danger warning on LED display
+    let mut barrier_open = false;    // Barrier gate state (false = closed/down)
 
     // ========================================================================
     // Main Game Loop
@@ -104,7 +105,25 @@ async fn main() -> Result<(), macroquad::Error> {
         // Input Processing
         // --------------------------------------------------------------------
 
-        (all_lights_red, danger_mode) = handle_input(all_lights_red, danger_mode);
+        let (new_all_lights_red, new_danger_mode, toggle_scada, reset_scada, toggle_barrier) =
+            handle_input(all_lights_red, danger_mode);
+        all_lights_red = new_all_lights_red;
+        danger_mode = new_danger_mode;
+
+        // Handle SCADA toggle for all buildings
+        if toggle_scada {
+            city.toggle_all_scada();
+        }
+
+        // Handle SCADA reset
+        if reset_scada {
+            city.reset_all_scada();
+        }
+
+        // Handle barrier toggle
+        if toggle_barrier {
+            barrier_open = !barrier_open;
+        }
 
         // --------------------------------------------------------------------
         // Window Resize Handling
@@ -143,9 +162,9 @@ async fn main() -> Result<(), macroquad::Error> {
         clear_background(ROAD_COLOR);
 
         // Render in layers: environment -> traffic -> overlays
-        city.render_environment();
+        city.render_environment(current_time, danger_mode, barrier_open);
         city.render_traffic(all_lights_red);
-        city.render_overlays(current_time, danger_mode);
+        city.render_overlays(current_time, danger_mode, barrier_open);
 
         // Present frame and wait for next
         next_frame().await;

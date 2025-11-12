@@ -82,6 +82,7 @@ impl WindowState {
 /// This function handles all keyboard input for controlling the simulation:
 /// - Traffic emergency stop mode
 /// - Danger warning display
+/// - SCADA system control
 /// - Reset to normal operation
 ///
 /// # Arguments
@@ -89,32 +90,41 @@ impl WindowState {
 /// * `danger_mode` - Current state of danger warning display
 ///
 /// # Returns
-/// Tuple of (new_all_lights_red, new_danger_mode) with updated states
+/// Tuple of (new_all_lights_red, new_danger_mode, toggle_all_scada, reset_scada, toggle_barrier) with updated states
+/// toggle_all_scada is true if all SCADA systems should be toggled
+/// reset_scada is true if SCADA should be reset to working state
+/// toggle_barrier is true if barrier gate should be toggled
 ///
 /// # Keyboard Controls
 /// - **Enter**: Toggle all traffic lights to red (emergency stop)
-/// - **Escape**: Reset all modes to normal
+/// - **Escape**: Reset all modes to normal (including SCADA)
 /// - **Left Shift**: Toggle danger warning on LED display
+/// - **S**: Toggle SCADA broken state for ALL buildings with SCADA
+/// - **B**: Toggle barrier gate (open/close)
 ///
 /// # Example
 /// ```
-/// let (all_lights_red, danger_mode) = handle_input(false, false);
-/// // User pressed Enter
-/// // all_lights_red is now true
+/// let (all_lights_red, danger_mode, toggle_scada, reset_scada, toggle_barrier) = handle_input(false, false);
+/// // User pressed 'B'
+/// // toggle_barrier is true
 /// ```
-pub fn handle_input(all_lights_red: bool, danger_mode: bool) -> (bool, bool) {
+pub fn handle_input(all_lights_red: bool, danger_mode: bool) -> (bool, bool, bool, bool, bool) {
     let mut new_all_lights_red = all_lights_red;
     let mut new_danger_mode = danger_mode;
+    let mut toggle_all_scada = false;
+    let mut reset_scada = false;
+    let mut toggle_barrier = false;
 
     // Toggle all traffic lights to red (emergency stop)
     if is_key_pressed(KeyCode::Enter) {
         new_all_lights_red = !new_all_lights_red;
     }
 
-    // Reset all modes to normal
+    // Reset all modes to normal (including SCADA)
     if is_key_pressed(KeyCode::Escape) {
         new_all_lights_red = false;
         new_danger_mode = false;
+        reset_scada = true;
     }
 
     // Toggle danger warning on LED display
@@ -122,5 +132,15 @@ pub fn handle_input(all_lights_red: bool, danger_mode: bool) -> (bool, bool) {
         new_danger_mode = !new_danger_mode;
     }
 
-    (new_all_lights_red, new_danger_mode)
+    // Toggle all SCADA systems
+    if is_key_pressed(KeyCode::S) {
+        toggle_all_scada = true;
+    }
+
+    // Toggle barrier gate
+    if is_key_pressed(KeyCode::B) {
+        toggle_barrier = true;
+    }
+
+    (new_all_lights_red, new_danger_mode, toggle_all_scada, reset_scada, toggle_barrier)
 }

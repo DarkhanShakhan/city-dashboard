@@ -4,6 +4,7 @@
 
 use crate::block::{Block, BlockObject, RenderContext};
 use macroquad::prelude::*;
+use std::cell::RefCell;
 
 // ============================================================================
 // Fence Rendering Constants
@@ -73,6 +74,16 @@ pub struct Fence {
 
     /// Fence color
     pub color: Color,
+
+    /// Whether this fence has a barrier gate
+    pub has_barrier: bool,
+
+    /// Position of barrier gate along the fence (0.0 = start, 1.0 = end)
+    pub barrier_position: f32,
+
+    /// Current animated angle for barrier boom arm (0° = closed/horizontal, 85° = open/vertical)
+    /// Uses RefCell for interior mutability during rendering
+    current_angle: RefCell<f32>,
 }
 
 impl Fence {
@@ -92,7 +103,17 @@ impl Fence {
             depth_percent,
             height_pixels,
             color,
+            has_barrier: false,
+            barrier_position: 0.5, // Default to center
+            current_angle: RefCell::new(0.0), // Start closed
         }
+    }
+
+    /// Adds an animated barrier gate to this fence
+    pub fn with_barrier(mut self, position: f32) -> Self {
+        self.has_barrier = true;
+        self.barrier_position = position;
+        self
     }
 
     /// Creates a Fence object using the builder pattern
@@ -206,10 +227,135 @@ impl Fence {
             color,
         );
     }
+
+    /// Renders an animated barrier gate (boom gate style)
+    fn render_barrier(&self, params: &RenderParams, context: &RenderContext) {
+        if !self.has_barrier {
+            return;
+        }
+
+        // Calculate barrier position along the fence - position at the START of the gap
+        // So the boom arm can extend across the entire gap
+        let barrier_x = params.x; // Start of the fence/gap
+        let barrier_x_top = params.x_top;
+
+        // Target angle based on barrier state
+        let target_angle = if context.barrier_open {
+            85.0_f32.to_radians() // Open = vertical (85 degrees)
+        } else {
+            0.0 // Closed = horizontal (0 degrees)
+        };
+
+        // Smooth animation toward target with slower speed
+        let mut current_angle = self.current_angle.borrow_mut();
+        let transition_speed = 0.4; // Radians per second (slower = takes longer)
+        let delta = get_frame_time();
+
+        // Move current angle toward target
+        let angle_diff = target_angle - *current_angle;
+        if angle_diff.abs() > 0.001 {
+            // Smooth interpolation
+            *current_angle += angle_diff.signum() * transition_speed * delta;
+
+            // Clamp to target if we're very close
+            if (*current_angle - target_angle).abs() < transition_speed * delta {
+                *current_angle = target_angle;
+            }
+        }
+
+        let rotation_angle = *current_angle;
+
+        // Post dimensions
+        let post_width = 6.0;
+        let post_height = 15.0;
+        let post_color = Color::new(0.3, 0.3, 0.3, 1.0); // Dark gray
+
+        // Calculate post position (rises from fence)
+        let post_x_offset = post_height * ISOMETRIC_X_FACTOR;
+        let post_y_offset = post_height * ISOMETRIC_Y_FACTOR;
+        let post_x = barrier_x_top - post_x_offset;
+        let post_y = params.y_top - post_y_offset;
+
+        // Draw post (vertical support)
+        draw_rectangle(
+            post_x,
+            params.y_top - post_height,
+            post_width,
+            post_height,
+            post_color,
+        );
+
+        // Boom arm dimensions - should span the entire gap (from fence end to fence end)
+        // The gap is defined by the fence width, so boom should match it
+        let boom_length = params.width; // Full width of the gap area
+        let boom_thickness = 4.0;
+
+        // Calculate boom arm end position based on rotation
+        let boom_end_x = boom_length * rotation_angle.cos();
+        let boom_end_y = -boom_length * rotation_angle.sin();
+
+        // Draw boom arm with red and white stripes
+        let stripe_count = 3; // 3 stripes for the gap-spanning boom
+        let stripe_length = boom_length / stripe_count as f32;
+
+        for i in 0..stripe_count {
+            let stripe_start = i as f32 * stripe_length;
+            let stripe_end = (i + 1) as f32 * stripe_length;
+
+            // Alternate colors
+            let color = if i % 2 == 0 {
+                Color::new(0.95, 0.1, 0.1, 1.0) // Red
+            } else {
+                Color::new(0.95, 0.95, 0.95, 1.0) // White
+            };
+
+            // Calculate stripe positions
+            let x1 = post_x + post_width / 2.0 + stripe_start * rotation_angle.cos();
+            let y1 = post_y - stripe_start * rotation_angle.sin();
+            let x2 = post_x + post_width / 2.0 + stripe_end * rotation_angle.cos();
+            let y2 = post_y - stripe_end * rotation_angle.sin();
+
+            // Draw stripe as thick line
+            let perpendicular_x = -rotation_angle.sin() * boom_thickness / 2.0;
+            let perpendicular_y = -rotation_angle.cos() * boom_thickness / 2.0;
+
+            // Draw rectangle for stripe
+            draw_triangle(
+                Vec2 { x: x1 + perpendicular_x, y: y1 + perpendicular_y },
+                Vec2 { x: x1 - perpendicular_x, y: y1 - perpendicular_y },
+                Vec2 { x: x2 + perpendicular_x, y: y2 + perpendicular_y },
+                color,
+            );
+            draw_triangle(
+                Vec2 { x: x2 + perpendicular_x, y: y2 + perpendicular_y },
+                Vec2 { x: x2 - perpendicular_x, y: y2 - perpendicular_y },
+                Vec2 { x: x1 - perpendicular_x, y: y1 - perpendicular_y },
+                color,
+            );
+        }
+
+        // Draw counterweight on the back side (small red box) - opposite direction of boom
+        let counterweight_size = 6.0;
+        let counterweight_offset = 10.0; // Distance from post center
+        let counterweight_x = post_x + post_width / 2.0 - counterweight_offset * rotation_angle.cos();
+        let counterweight_y = post_y + counterweight_offset * rotation_angle.sin();
+
+        draw_rectangle(
+            counterweight_x - counterweight_size / 2.0,
+            counterweight_y - counterweight_size / 2.0,
+            counterweight_size,
+            counterweight_size,
+            Color::new(0.7, 0.1, 0.1, 1.0),
+        );
+    }
 }
 
 impl BlockObject for Fence {
-    fn render(&self, block: &Block, _context: &RenderContext) {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn render(&self, block: &Block, context: &RenderContext) {
         // Get block position and size in pixels
         let block_x = block.x();
         let block_y = block.y();
@@ -241,6 +387,9 @@ impl BlockObject for Fence {
         self.render_front_face(&params);
         self.render_side_face(&params);
         self.render_top_face(&params);
+
+        // Render barrier if present
+        self.render_barrier(&params, context);
     }
 }
 
@@ -354,6 +503,9 @@ impl FenceBuilder {
     /// - depth_percent: 0.5 (50% of block height)
     /// - height_pixels: 8.0 (8 pixels tall)
     /// - color: Brown (0.4, 0.3, 0.2, 1.0)
+    /// - has_barrier: false
+    /// - barrier_position: 0.5
+    /// - current_angle: 0.0 (closed)
     pub fn build(self) -> Fence {
         Fence {
             x_offset_percent: self.x_offset_percent.unwrap_or(0.0),
@@ -362,6 +514,9 @@ impl FenceBuilder {
             depth_percent: self.depth_percent.unwrap_or(0.5),
             height_pixels: self.height_pixels.unwrap_or(8.0),
             color: self.color.unwrap_or(DEFAULT_FENCE_COLOR),
+            has_barrier: false,
+            barrier_position: 0.5,
+            current_angle: RefCell::new(0.0),
         }
     }
 }

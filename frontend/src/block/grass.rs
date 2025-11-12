@@ -1,9 +1,9 @@
 //! Grass block object implementation
 //!
-//! Provides a simple grass area that can fill or partially fill city blocks.
+//! Provides a simple flat grass area that can fill or partially fill city blocks.
 
 use crate::block::{Block, BlockObject, RenderContext};
-use crate::constants::visual::{BLOCK_CORNER_RADIUS, DEPTH_OFFSET, GRASS_COLOR, GRASS_DEPTH_COLOR};
+use crate::constants::visual::{BLOCK_CORNER_RADIUS, GRASS_COLOR};
 use crate::rendering::draw_rounded_rectangle;
 use macroquad::prelude::*;
 
@@ -94,20 +94,8 @@ impl BlockObject for Grass {
         let width = self.width_percent * block_width;
         let height = self.height_percent * block_height;
 
-        // Draw main grass rectangle with rounded corners
+        // Draw flat grass rectangle with rounded corners (no depth effects)
         draw_rounded_rectangle(x, y, width, height, BLOCK_CORNER_RADIUS, GRASS_COLOR);
-
-        // Add depth edge on right side for 2.5D effect
-        draw_rectangle(x + width, y, DEPTH_OFFSET, height, GRASS_DEPTH_COLOR);
-
-        // Add depth edge on bottom for 2.5D effect
-        draw_rectangle(
-            x,
-            y + height,
-            width + DEPTH_OFFSET,
-            DEPTH_OFFSET,
-            GRASS_DEPTH_COLOR,
-        );
     }
 }
 

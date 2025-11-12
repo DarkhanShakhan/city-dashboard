@@ -198,7 +198,13 @@ impl Fence {
     /// Renders the top face of the fence
     fn render_top_face(&self, params: &RenderParams) {
         let color = self.get_face_color(FenceFace::Top);
-        draw_rectangle(params.x_top, params.y_top, params.width, params.depth, color);
+        draw_rectangle(
+            params.x_top,
+            params.y_top,
+            params.width,
+            params.depth,
+            color,
+        );
     }
 }
 

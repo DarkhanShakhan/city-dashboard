@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 macroquad = "0.4.14"
-ureq = "2.10"        # Simple HTTP client (no async runtime needed)
+ureq = { version = "2.10", default-features = false, features = ["json"] }  # Disable TLS for WASM compatibility
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"   # JSON parsing for events
+getrandom = { version = "0.2", features = ["js"] }  # Required for WASM builds

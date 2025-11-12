@@ -25,31 +25,15 @@ use intersection::generate_intersections;
 use constants::{visual::ROAD_COLOR, window::RESIZE_THRESHOLD};
 
 // ============================================================================
-// Main Application
+// Helper Functions
 // ============================================================================
 
-#[macroquad::main("City Dashboard")]
-async fn main() -> Result<(), macroquad::Error> {
-    // ========================================================================
-    // Initialization
-    // ========================================================================
-
-    // Initialize city with intersections
-    let mut city = City::new();
-    let intersections = generate_intersections();
-    for intersection in intersections {
-        city.add_intersection(intersection);
-    }
-
-    // Add grass blocks to the city
-    use block::{Block, generate_grass_blocks};
-    let grass_blocks = generate_grass_blocks();
-    for grass_block in grass_blocks {
-        city.add_block(grass_block);
-    }
-
-    // Create block with LED display (second block in first row)
-    // This block is between the first and second vertical roads, in the top row
+/// Creates the LED display block
+///
+/// This block is positioned between the first and second vertical roads
+/// in the top row of the city grid.
+fn create_led_display_block() -> block::Block {
+    use block::Block;
     use led_display_object::LEDDisplay;
     use constants::road_network::{VERTICAL_ROAD_POSITIONS, HORIZONTAL_ROAD_POSITIONS};
     use constants::visual::ROAD_WIDTH;
@@ -71,7 +55,35 @@ async fn main() -> Result<(), macroquad::Error> {
         .with_size(0.8, 0.4);
     display_block.add_object(Box::new(led));
 
-    city.add_block(display_block);
+    display_block
+}
+
+// ============================================================================
+// Main Application
+// ============================================================================
+
+#[macroquad::main("City Dashboard")]
+async fn main() -> Result<(), macroquad::Error> {
+    // ========================================================================
+    // Initialization
+    // ========================================================================
+
+    // Initialize city with intersections
+    let mut city = City::new();
+    let intersections = generate_intersections();
+    for intersection in intersections {
+        city.add_intersection(intersection);
+    }
+
+    // Add grass blocks to the city
+    use block::generate_grass_blocks;
+    let grass_blocks = generate_grass_blocks();
+    for grass_block in grass_blocks {
+        city.add_block(grass_block);
+    }
+
+    // Create and add LED display block
+    city.add_block(create_led_display_block());
 
     // Initialize window state tracking
     let mut window_state = WindowState::new();
@@ -102,6 +114,19 @@ async fn main() -> Result<(), macroquad::Error> {
             // Clear all cars on resize to prevent positioning issues
             // Cars will naturally respawn at correct positions
             city.clear_cars();
+
+            // Regenerate all blocks with new screen dimensions
+            // Since ROAD_WIDTH is in pixels, percentage calculations need to be updated
+            city.clear_blocks();
+
+            // Recreate grass blocks with updated percentages
+            let grass_blocks = generate_grass_blocks();
+            for grass_block in grass_blocks {
+                city.add_block(grass_block);
+            }
+
+            // Recreate LED display block with updated percentages
+            city.add_block(create_led_display_block());
         }
 
         // --------------------------------------------------------------------

@@ -9,14 +9,14 @@ use macroquad::prelude::*;
 // Fence Rendering Constants
 // ============================================================================
 
-/// Fence height in pixels
-const FENCE_HEIGHT: f32 = 8.0;
+/// Fence thickness in pixels (how thick the fence structure is)
+const FENCE_THICKNESS: f32 = 3.0;
 
 /// Fence post width in pixels
-const FENCE_POST_WIDTH: f32 = 2.0;
+const FENCE_POST_WIDTH: f32 = 3.0;
 
 /// Spacing between fence posts in pixels
-const FENCE_POST_SPACING: f32 = 12.0;
+const FENCE_POST_SPACING: f32 = 15.0;
 
 /// Default fence color (brown)
 const DEFAULT_FENCE_COLOR: Color = Color::new(0.4, 0.3, 0.2, 1.0);
@@ -102,61 +102,57 @@ impl Fence {
         )
     }
 
-    /// Renders a horizontal fence segment
+    /// Renders a horizontal fence segment (bottom edge, front view)
+    /// This is the fence running left-to-right
     fn render_horizontal_segment(&self, x: f32, y: f32, width: f32, color: Color) {
-        let num_posts = (width / FENCE_POST_SPACING) as i32;
+        let darker = Self::darken_color(color, 0.15);
 
+        // Draw continuous top rail
+        draw_rectangle(x, y, width, FENCE_THICKNESS, color);
+
+        // Draw continuous bottom rail (slightly below top)
+        draw_rectangle(x, y + 2.0, width, FENCE_THICKNESS, darker);
+
+        // Draw posts at intervals
+        let num_posts = (width / FENCE_POST_SPACING) as i32 + 1;
         for i in 0..num_posts {
             let post_x = x + i as f32 * FENCE_POST_SPACING;
-
-            // Draw vertical post
-            draw_rectangle(
-                post_x,
-                y - FENCE_HEIGHT,
-                FENCE_POST_WIDTH,
-                FENCE_HEIGHT,
-                color,
-            );
-
-            // Draw horizontal rail connecting to next post
-            if i < num_posts - 1 {
+            if post_x <= x + width {
+                // Draw vertical post as a small square
                 draw_rectangle(
-                    post_x + FENCE_POST_WIDTH,
-                    y - FENCE_HEIGHT / 2.0,
-                    FENCE_POST_SPACING - FENCE_POST_WIDTH,
-                    2.0,
-                    color,
+                    post_x,
+                    y,
+                    FENCE_POST_WIDTH,
+                    FENCE_THICKNESS + 2.0,
+                    darker,
                 );
             }
         }
     }
 
-    /// Renders a vertical (depth) fence segment with isometric perspective
-    fn render_vertical_segment(&self, x: f32, y: f32, depth: f32, color: Color) {
-        let num_posts = (depth / FENCE_POST_SPACING) as i32;
+    /// Renders a depth fence segment (right edge, isometric view)
+    /// This is the fence running away from camera (in depth)
+    fn render_depth_segment(&self, x: f32, y: f32, depth: f32, color: Color) {
+        let darker = Self::darken_color(color, 0.2);
 
+        // Draw continuous top rail going into depth
+        draw_rectangle(x, y, FENCE_THICKNESS, depth, darker);
+
+        // Draw continuous bottom rail (slightly offset)
+        draw_rectangle(x + 2.0, y, FENCE_THICKNESS, depth, Self::darken_color(darker, 0.1));
+
+        // Draw posts at intervals
+        let num_posts = (depth / FENCE_POST_SPACING) as i32 + 1;
         for i in 0..num_posts {
-            let offset = i as f32 * FENCE_POST_SPACING;
-            let post_x = x;
-            let post_y = y + offset;
-
-            // Post (vertical line going up)
-            draw_rectangle(
-                post_x,
-                post_y - FENCE_HEIGHT,
-                FENCE_POST_WIDTH,
-                FENCE_HEIGHT,
-                color,
-            );
-
-            // Horizontal rail (going toward next post in depth)
-            if i < num_posts - 1 {
+            let post_y = y + i as f32 * FENCE_POST_SPACING;
+            if post_y <= y + depth {
+                // Draw post going into depth
                 draw_rectangle(
-                    post_x,
-                    post_y - FENCE_HEIGHT / 2.0,
+                    x,
+                    post_y,
+                    FENCE_THICKNESS + 2.0,
                     FENCE_POST_WIDTH,
-                    FENCE_POST_SPACING,
-                    color,
+                    Self::darken_color(darker, 0.15),
                 );
             }
         }
@@ -177,15 +173,23 @@ impl BlockObject for Fence {
         let width = self.width_percent * block_width;
         let depth = self.depth_percent * block_height;
 
-        let darker_color = Self::darken_color(self.color, 0.1);
+        // Render fence perimeter in isometric view
+        // We see the top of the fence, with front and right sides visible
 
-        // Render fence perimeter (front and right sides visible)
-
-        // Front fence (bottom edge) - lighter color
+        // Front fence (bottom edge) - horizontal segment
         self.render_horizontal_segment(x, y + depth, width, self.color);
 
-        // Right fence (right edge) - darker for depth
-        self.render_vertical_segment(x + width, y, depth, darker_color);
+        // Right fence (right edge) - depth segment
+        self.render_depth_segment(x + width, y, depth, self.color);
+
+        // Optional: Add left and back sides for complete perimeter
+        // Uncomment these if you want a fully enclosed fence:
+
+        // Left fence (left edge) - depth segment
+        // self.render_depth_segment(x, y, depth, self.color);
+
+        // Back fence (top edge) - horizontal segment
+        // self.render_horizontal_segment(x, y, width, self.color);
     }
 }
 

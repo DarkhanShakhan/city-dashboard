@@ -90,7 +90,13 @@ async fn sse_handler(State(state): State<Arc<AppState>>) -> Sse<impl tokio_strea
         }
     });
 
-    Sse::new(event_stream).keep_alive(KeepAlive::default())
+    // Configure keep-alive to send heartbeat every 15 seconds
+    // This prevents connection timeouts on idle connections
+    Sse::new(event_stream).keep_alive(
+        KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("keepalive")
+    )
 }
 
 // ============================================================================

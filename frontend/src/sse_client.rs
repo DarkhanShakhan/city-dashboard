@@ -35,7 +35,7 @@ impl Default for SseConfig {
         Self {
             url: "http://localhost:3000/events".to_string(),
             reconnect_interval: 5,
-            timeout: 30,
+            timeout: 300, // 5 minutes - generous timeout for long-lived SSE connections
         }
     }
 }

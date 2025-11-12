@@ -753,10 +753,11 @@ impl BlockObject for Building {
 /// Generates all grass blocks for the city grid
 ///
 /// Creates a 4×3 grid of blocks (12 total) in the spaces between roads.
-/// Each block contains a Grass object that fills the entire block.
+/// Each block contains a Grass object as the base. Some blocks may have
+/// additional objects (like Buildings) placed on top of the grass.
 ///
 /// # Returns
-/// Vector of Block instances, each containing a Grass object
+/// Vector of Block instances, each containing at least a Grass object
 pub fn generate_grass_blocks() -> Vec<Block> {
     use crate::constants::{
         road_network::{HORIZONTAL_ROAD_POSITIONS, VERTICAL_ROAD_POSITIONS},
@@ -802,15 +803,20 @@ pub fn generate_grass_blocks() -> Vec<Block> {
             // Create block
             let mut block = Block::new(x_percent, y_percent, width_percent, height_percent, block_id);
 
-            // Add appropriate object based on block position
-            // Block 8 is second row, third column - add a building there
+            // Add grass to all blocks as the base
+            block.add_object(Box::new(Grass::fill()));
+
+            // Block 8 is second row, third column - add a building in the middle
             if block_id == 8 {
-                block.add_object(Box::new(Building::fill_with_color(
+                // Add building in the center of the block
+                // Positioned at 25% offset, sized to 50% of block dimensions
+                block.add_object(Box::new(Building::new(
+                    0.25,  // x_offset: 25% from left
+                    0.25,  // y_offset: 25% from top
+                    0.5,   // width: 50% of block width
+                    0.5,   // height: 50% of block height
                     macroquad::prelude::Color::new(0.5, 0.6, 0.7, 1.0) // Blue-gray building
                 )));
-            } else {
-                // Add grass to all other blocks
-                block.add_object(Box::new(Grass::fill()));
             }
 
             blocks.push(block);

@@ -32,6 +32,9 @@ const BUILDING_SIDE_DARKEN: f32 = 0.15;
 /// Amount to lighten top face of buildings for 3D effect
 const BUILDING_TOP_LIGHTEN: f32 = 0.1;
 
+/// Corner radius for building top (in pixels)
+const BUILDING_CORNER_RADIUS: f32 = 8.0;
+
 // ============================================================================
 // Color Manipulation Helpers
 // ============================================================================
@@ -645,6 +648,9 @@ pub struct Building {
     /// Depth as percentage of block height (0.0-1.0)
     pub depth_percent: f32,
 
+    /// Corner radius in pixels (for rounded top)
+    pub corner_radius: f32,
+
     /// Building color
     pub color: macroquad::prelude::Color,
 }
@@ -658,6 +664,7 @@ impl Building {
     /// * `width_percent` - Width as percentage of block width (0.0-1.0)
     /// * `height_pixels` - Height in pixels (vertical dimension of the 3D building)
     /// * `depth_percent` - Depth as percentage of block height (0.0-1.0)
+    /// * `corner_radius` - Corner radius in pixels (for rounded top)
     /// * `color` - Building color
     pub fn new(
         x_offset_percent: f32,
@@ -665,6 +672,7 @@ impl Building {
         width_percent: f32,
         height_pixels: f32,
         depth_percent: f32,
+        corner_radius: f32,
         color: macroquad::prelude::Color,
     ) -> Self {
         Self {
@@ -673,6 +681,7 @@ impl Building {
             width_percent,
             height_pixels,
             depth_percent,
+            corner_radius,
             color,
         }
     }
@@ -686,6 +695,7 @@ impl Building {
     ///     .width(0.4)
     ///     .height(40.0)
     ///     .depth(0.3)
+    ///     .corner_radius(8.0)
     ///     .color(Color::new(0.5, 0.6, 0.7, 1.0))
     ///     .build();
     /// ```
@@ -825,7 +835,14 @@ impl Building {
     /// Renders the top face of the building
     fn render_top_face(&self, params: &RenderParams) {
         let color = self.get_face_color(BuildingFace::Top);
-        draw_rectangle(params.x_top, params.y_top, params.width, params.depth, color);
+        draw_rounded_rectangle(
+            params.x_top,
+            params.y_top,
+            params.width,
+            params.depth,
+            self.corner_radius,
+            color,
+        );
     }
 }
 
@@ -872,6 +889,7 @@ pub struct BuildingBuilder {
     width_percent: Option<f32>,
     height_pixels: Option<f32>,
     depth_percent: Option<f32>,
+    corner_radius: Option<f32>,
     color: Option<macroquad::prelude::Color>,
 }
 
@@ -884,6 +902,7 @@ impl BuildingBuilder {
             width_percent: None,
             height_pixels: None,
             depth_percent: None,
+            corner_radius: None,
             color: None,
         }
     }
@@ -925,6 +944,12 @@ impl BuildingBuilder {
         self
     }
 
+    /// Sets the corner radius in pixels
+    pub fn corner_radius(mut self, corner_radius: f32) -> Self {
+        self.corner_radius = Some(corner_radius);
+        self
+    }
+
     /// Sets the building color
     pub fn color(mut self, color: macroquad::prelude::Color) -> Self {
         self.color = Some(color);
@@ -939,6 +964,7 @@ impl BuildingBuilder {
     /// - width_percent: 0.3 (30% of block width)
     /// - height_pixels: 50.0 (50 pixels tall)
     /// - depth_percent: 0.3 (30% of block height)
+    /// - corner_radius: 8.0 (8 pixel corner radius)
     /// - color: Gray (0.6, 0.6, 0.6, 1.0)
     pub fn build(self) -> Building {
         Building {
@@ -947,6 +973,7 @@ impl BuildingBuilder {
             width_percent: self.width_percent.unwrap_or(0.3),
             height_pixels: self.height_pixels.unwrap_or(50.0),
             depth_percent: self.depth_percent.unwrap_or(0.3),
+            corner_radius: self.corner_radius.unwrap_or(BUILDING_CORNER_RADIUS),
             color: self
                 .color
                 .unwrap_or(macroquad::prelude::Color::new(0.6, 0.6, 0.6, 1.0)),
@@ -1030,6 +1057,7 @@ pub fn generate_grass_blocks() -> Vec<Block> {
                     0.4,   // width: 40% of block width
                     40.0,  // height: 40 pixels tall
                     0.3,   // depth: 30% of block height
+                    8.0,   // corner_radius: 8 pixels
                     macroquad::prelude::Color::new(0.5, 0.6, 0.7, 1.0), // Blue-gray building
                 )));
             }

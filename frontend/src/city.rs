@@ -329,7 +329,7 @@ impl City {
     /// - Traffic lights at all intersections
     /// - All cars with directional sprites
     ///
-    /// Traffic lights are drawn first (background), then cars (foreground).
+    /// Cars are drawn first (background), then traffic lights (foreground).
     ///
     /// # Arguments
     /// * `all_lights_red` - If true, forces all traffic lights to red (emergency mode)
@@ -340,13 +340,13 @@ impl City {
         // Convert HashMap values to Vec for rendering
         let intersections: Vec<_> = self.intersections.values().cloned().collect();
 
-        // Draw traffic lights first (behind cars)
-        draw_traffic_lights(&intersections, all_lights_red);
-
-        // Draw all cars
+        // Draw all cars first (behind traffic lights)
         for car in &self.cars {
             draw_car(car);
         }
+
+        // Draw traffic lights on top
+        draw_traffic_lights(&intersections, all_lights_red);
     }
 
     /// Renders UI overlays and decorative elements

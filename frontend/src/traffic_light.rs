@@ -280,11 +280,7 @@ impl TrafficLight {
     /// # Arguments
     /// * `force_red` - If true, forces the light to show red regardless of current state
     pub fn render(&self, force_red: bool) {
-        let state = if force_red {
-            0
-        } else {
-            self.get_state_u8()
-        };
+        let state = if force_red { 0 } else { self.get_state_u8() };
 
         draw_traffic_light(self.x(), self.y(), state);
     }
@@ -338,12 +334,7 @@ impl IntersectionTrafficLight {
     /// * `y_percent` - Y position as percentage (0.0-1.0)
     /// * `id` - Unique identifier
     /// * `vertical_starts_green` - If true, vertical starts green (horizontal red), else opposite
-    pub fn new(
-        x_percent: f32,
-        y_percent: f32,
-        id: usize,
-        vertical_starts_green: bool,
-    ) -> Self {
+    pub fn new(x_percent: f32, y_percent: f32, id: usize, vertical_starts_green: bool) -> Self {
         let (vertical_state, horizontal_state, active_direction) = if vertical_starts_green {
             (
                 LightState::default_green(),
@@ -481,20 +472,39 @@ impl IntersectionTrafficLight {
         let int_y = self.y();
 
         // Vertical traffic light (top-right corner)
+        // Calculate top-right grass block corner
+        let top_corner_x = int_x + ROAD_WIDTH / 2.0;
+        let top_corner_y = int_y - ROAD_WIDTH / 2.0;
+
         let v_state = if force_red {
             0
         } else {
             self.get_vertical_state()
         };
-        draw_traffic_light(int_x + offset, int_y - offset - 60.0, v_state);
+
+        // Position relative to corner
+        let v_x = top_corner_x + 10.0;
+        let v_y = top_corner_y - 70.0;
+        draw_traffic_light(v_x, v_y, v_state);
 
         // Horizontal traffic light (bottom-left corner)
+        // Calculate bottom-left grass block corner
+        let bottom_corner_x = int_x - ROAD_WIDTH / 2.0;
+        let bottom_corner_y = int_y + ROAD_WIDTH / 2.0;
+
         let h_state = if force_red {
             0
         } else {
             self.get_horizontal_state()
         };
-        draw_traffic_light(int_x - offset - 20.0, int_y + offset + 5.0, h_state);
+
+        // Apply same offset from corner as top-right light (mirrored)
+        // Top-right is +10 from corner in X, -70 in Y
+        // Bottom-left should be -10 from corner in X, +0 in Y (no extra offset needed)
+        let h_x = bottom_corner_x - 30.0;
+        let h_y = bottom_corner_y - 35.0;
+
+        draw_traffic_light(h_x, h_y, h_state);
     }
 }
 
@@ -674,7 +684,6 @@ impl TrafficLightBuilder {
     }
 }
 
-
 // ============================================================================
 // Traffic Light State Logic
 // ============================================================================
@@ -722,6 +731,17 @@ pub fn get_traffic_light_state(time_offset: f32) -> u8 {
 /// * `y` - Y position for top-left corner of light box
 /// * `active_light` - Which light is currently on (0=red, 1=yellow, 2=green)
 pub fn draw_traffic_light(x: f32, y: f32, active_light: u8) {
+    draw_traffic_light_with_pole_offset(x, y, active_light, 0.0);
+}
+
+/// Renders a traffic light with custom pole positioning
+///
+/// # Arguments
+/// * `x` - X position for top-left corner of light box
+/// * `y` - Y position for top-left corner of light box
+/// * `active_light` - Which light is currently on (0=red, 1=yellow, 2=green)
+/// * `pole_x_offset` - Horizontal offset for pole position relative to light box center
+pub fn draw_traffic_light_with_pole_offset(x: f32, y: f32, active_light: u8, pole_x_offset: f32) {
     let box_width = TRAFFIC_LIGHT_SIZE + 6.0;
     let box_height = TRAFFIC_LIGHT_SIZE * 3.0 + TRAFFIC_LIGHT_SPACING * 4.0;
 
@@ -729,32 +749,15 @@ pub fn draw_traffic_light(x: f32, y: f32, active_light: u8) {
     draw_rectangle(x, y, box_width, box_height, BOX_COLOR);
 
     // Draw 2.5D depth edges
-    draw_rectangle(
-        x + box_width,
-        y,
-        DEPTH_OFFSET,
-        box_height,
-        BOX_DEPTH_COLOR,
-    );
-    draw_rectangle(
-        x,
-        y + box_height,
-        box_width,
-        DEPTH_OFFSET,
-        BOX_DEPTH_COLOR,
-    );
+    draw_rectangle(x + box_width, y, DEPTH_OFFSET, box_height, BOX_DEPTH_COLOR);
+    draw_rectangle(x, y + box_height, box_width, DEPTH_OFFSET, BOX_DEPTH_COLOR);
 
-    // Draw support pole underneath
-    draw_rectangle(
-        x + box_width / 2.0 - 2.0,
-        y + box_height,
-        4.0,
-        12.0,
-        POLE_COLOR,
-    );
+    // Draw support pole underneath (with optional offset)
+    let pole_x = x + box_width / 2.0 - 2.0 + pole_x_offset;
+    draw_rectangle(pole_x, y + box_height, 4.0, 12.0, POLE_COLOR);
     // Pole depth edge
     draw_rectangle(
-        x + box_width / 2.0 + 2.0,
+        pole_x + 4.0,
         y + box_height,
         DEPTH_OFFSET,
         12.0,

@@ -677,13 +677,13 @@ impl BlockObject for Building {
             1.0,
         );
 
-        // Draw right side face (connects rectangular top to base)
-        // Right side connects from right edge of top to right edge extended at base
+        // Draw right side face (angled to the left)
+        // Side goes from right edge of front to left, creating depth
         let side_points = vec![
-            Vec2::new(x + width, top_y),           // Top right
-            Vec2::new(x + width + depth, top_y),   // Top right + depth (same y)
-            Vec2::new(x + width + depth, base_y),  // Bottom right + depth
-            Vec2::new(x + width, base_y),          // Bottom right
+            Vec2::new(x + width, top_y),           // Top right of front
+            Vec2::new(x + width - depth, top_y),   // Top right angled left
+            Vec2::new(x + width - depth, base_y),  // Bottom right angled left
+            Vec2::new(x + width, base_y),          // Bottom right of front
         ];
 
         // Fill the side
@@ -700,11 +700,18 @@ impl BlockObject for Building {
             side_color,
         );
 
-        // Draw top face as a rectangle (not isometric)
-        draw_rounded_rectangle(x, top_y, width, depth, BLOCK_CORNER_RADIUS, top_color);
+        // Draw top face as a parallelogram (not rounded, angled to match sides)
+        let top_points = vec![
+            Vec2::new(x, top_y),                   // Front left
+            Vec2::new(x + width, top_y),           // Front right
+            Vec2::new(x + width - depth, top_y),   // Back right (angled left)
+            Vec2::new(x - depth, top_y),           // Back left (angled left)
+        ];
+        draw_triangle(top_points[0], top_points[1], top_points[2], top_color);
+        draw_triangle(top_points[0], top_points[2], top_points[3], top_color);
 
         // Draw front face with rounded corners
-        draw_rounded_rectangle(x, top_y + depth, width, cube_height - depth, BLOCK_CORNER_RADIUS, front_color);
+        draw_rounded_rectangle(x, top_y, width, cube_height, BLOCK_CORNER_RADIUS, front_color);
     }
 }
 

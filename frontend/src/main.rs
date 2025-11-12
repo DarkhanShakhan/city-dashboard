@@ -4,6 +4,7 @@ mod block;
 mod car;
 mod city;
 mod constants;
+mod events;
 mod input;
 mod intersection;
 mod led_chars;
@@ -13,12 +14,15 @@ mod models;
 mod rendering;
 mod road;
 mod spawner;
+mod sse_client;
 mod traffic_light;
 
 use city::City;
+use events::{create_event_channel, GameEvent};
 use input::{handle_input, WindowState};
 use intersection::generate_intersections;
 use logging::LogWindow;
+use sse_client::start_sse_client;
 
 // ============================================================================
 // Configuration Constants
@@ -94,6 +98,16 @@ async fn main() -> Result<(), macroquad::Error> {
     let mut log_window = LogWindow::new(50); // Keep last 50 entries
     log_window.log("City Dashboard initialized");
 
+    // Initialize event channel for SSE communication
+    let (event_sender, event_receiver) = create_event_channel();
+
+    // Start SSE client in background thread
+    // URL can be configured via environment variable: SSE_URL
+    let sse_url = std::env::var("SSE_URL")
+        .unwrap_or_else(|_| "http://localhost:3000/events".to_string());
+    let _sse_handle = start_sse_client(sse_url.clone(), event_sender);
+    log_window.log(format!("SSE client connecting to: {}", sse_url));
+
     // Initialize control modes
     let mut all_lights_red = false; // Emergency traffic stop mode
     let mut danger_mode = false;     // Danger warning on LED display
@@ -123,6 +137,103 @@ async fn main() -> Result<(), macroquad::Error> {
         // Handle log window toggle
         if is_key_pressed(KeyCode::L) {
             log_window.toggle_visibility();
+        }
+
+        // --------------------------------------------------------------------
+        // Process SSE Events
+        // --------------------------------------------------------------------
+
+        let sse_events = event_receiver.poll();
+        for event in sse_events {
+            match event {
+                GameEvent::BarrierBroken { team, message } => {
+                    barrier_open = true;
+                    let msg = message.unwrap_or_else(|| "Gate compromised".to_string());
+                    log_window.log(format!("BARRIER BROKEN by {} - {}", team, msg));
+                }
+
+                GameEvent::BarrierRepaired { team } => {
+                    barrier_open = false;
+                    if let Some(team) = team {
+                        log_window.log(format!("Barrier repaired by {}", team));
+                    } else {
+                        log_window.log("Barrier repaired");
+                    }
+                }
+
+                GameEvent::LedDisplayBroken { team, message } => {
+                    danger_mode = true;
+                    let msg = message.unwrap_or_else(|| "Display damaged".to_string());
+                    log_window.log(format!("LED DISPLAY BROKEN by {} - {}", team, msg));
+                }
+
+                GameEvent::LedDisplayRepaired => {
+                    danger_mode = false;
+                    log_window.log("LED display repaired");
+                }
+
+                GameEvent::ScadaCompromised {
+                    building_id,
+                    team,
+                    message,
+                } => {
+                    city.toggle_all_scada();
+                    let msg = message.unwrap_or_else(|| "System compromised".to_string());
+                    if let Some(id) = building_id {
+                        log_window.log(format!(
+                            "SCADA COMPROMISED (Building {}) by {} - {}",
+                            id, team, msg
+                        ));
+                    } else {
+                        log_window.log(format!("SCADA COMPROMISED by {} - {}", team, msg));
+                    }
+                }
+
+                GameEvent::ScadaRestored { building_id } => {
+                    city.reset_all_scada();
+                    if let Some(id) = building_id {
+                        log_window.log(format!("SCADA restored (Building {})", id));
+                    } else {
+                        log_window.log("SCADA systems restored");
+                    }
+                }
+
+                GameEvent::EmergencyStop { reason } => {
+                    all_lights_red = true;
+                    log_window.log(format!("EMERGENCY STOP - {}", reason));
+                }
+
+                GameEvent::EmergencyStopDeactivated => {
+                    all_lights_red = false;
+                    log_window.log("Emergency stop deactivated");
+                }
+
+                GameEvent::DangerModeActivated { reason } => {
+                    danger_mode = true;
+                    log_window.log(format!("DANGER MODE - {}", reason));
+                }
+
+                GameEvent::DangerModeDeactivated => {
+                    danger_mode = false;
+                    log_window.log("Danger mode deactivated");
+                }
+
+                GameEvent::LogMessage { level: _, message } => {
+                    // All logs are critical in this system
+                    log_window.log(message);
+                }
+
+                GameEvent::ConnectionStatus { connected, error } => {
+                    if connected {
+                        log_window.log("Server connected");
+                    } else if let Some(err) = error {
+                        // Only log first connection attempt and actual errors
+                        if !err.contains("Connecting to server") {
+                            log_window.log(format!("Server: {}", err));
+                        }
+                    }
+                }
+            }
         }
 
         // Log emergency traffic stop state changes

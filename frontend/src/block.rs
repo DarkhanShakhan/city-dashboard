@@ -638,6 +638,14 @@ impl Building {
     }
 }
 
+/// Helper function to draw a parallelogram using two triangles
+fn draw_parallelogram(p1: Vec2, p2: Vec2, p3: Vec2, p4: Vec2, color: macroquad::prelude::Color) {
+    use macroquad::prelude::*;
+    // Draw two triangles to form a parallelogram
+    draw_triangle(p1, p2, p3, color);
+    draw_triangle(p1, p3, p4, color);
+}
+
 impl BlockObject for Building {
     fn render(&self, block: &Block, _context: &RenderContext) {
         use macroquad::prelude::*;
@@ -678,37 +686,22 @@ impl BlockObject for Building {
         );
 
         // Draw right side face (angled to the right for perspective)
-        // Side goes from right edge of front to right, creating depth
-        let side_points = vec![
+        draw_parallelogram(
             Vec2::new(x + width, top_y),           // Top right of front
             Vec2::new(x + width + depth, top_y),   // Top right angled right
             Vec2::new(x + width + depth, base_y),  // Bottom right angled right
             Vec2::new(x + width, base_y),          // Bottom right of front
-        ];
-
-        // Fill the side
-        draw_triangle(
-            side_points[0],
-            side_points[1],
-            side_points[2],
-            side_color,
-        );
-        draw_triangle(
-            side_points[0],
-            side_points[2],
-            side_points[3],
             side_color,
         );
 
         // Draw top face as a parallelogram (not rounded, angled to match sides)
-        let top_points = vec![
+        draw_parallelogram(
             Vec2::new(x, top_y),                   // Front left
             Vec2::new(x + width, top_y),           // Front right
             Vec2::new(x + width + depth, top_y),   // Back right (angled right)
             Vec2::new(x + depth, top_y),           // Back left (angled right)
-        ];
-        draw_triangle(top_points[0], top_points[1], top_points[2], top_color);
-        draw_triangle(top_points[0], top_points[2], top_points[3], top_color);
+            top_color,
+        );
 
         // Draw front face with rounded corners
         draw_rounded_rectangle(x, top_y, width, cube_height, BLOCK_CORNER_RADIUS, front_color);

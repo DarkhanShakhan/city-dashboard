@@ -565,6 +565,188 @@ impl GrassBuilder {
 }
 
 // ============================================================================
+// Building Object Implementation
+// ============================================================================
+
+/// A building object that renders as a 3D cube
+///
+/// Renders a building with 2.5D depth effect showing three visible faces:
+/// front, top, and right side.
+/// Position and size are relative to the containing block.
+pub struct Building {
+    /// Horizontal offset as percentage of block width (0.0 = left edge, 1.0 = right edge)
+    pub x_offset_percent: f32,
+
+    /// Vertical offset as percentage of block height (0.0 = top edge, 1.0 = bottom edge)
+    pub y_offset_percent: f32,
+
+    /// Width as percentage of block width (0.0-1.0)
+    pub width_percent: f32,
+
+    /// Height as percentage of block height (0.0-1.0)
+    pub height_percent: f32,
+
+    /// Building color
+    pub color: macroquad::prelude::Color,
+}
+
+impl Building {
+    /// Creates a new Building object
+    ///
+    /// # Arguments
+    /// * `x_offset_percent` - X offset as percentage of block width (0.0-1.0)
+    /// * `y_offset_percent` - Y offset as percentage of block height (0.0-1.0)
+    /// * `width_percent` - Width as percentage of block width (0.0-1.0)
+    /// * `height_percent` - Height as percentage of block height (0.0-1.0)
+    /// * `color` - Building color
+    pub fn new(
+        x_offset_percent: f32,
+        y_offset_percent: f32,
+        width_percent: f32,
+        height_percent: f32,
+        color: macroquad::prelude::Color,
+    ) -> Self {
+        Self {
+            x_offset_percent,
+            y_offset_percent,
+            width_percent,
+            height_percent,
+            color,
+        }
+    }
+
+    /// Creates a Building object that fills the entire block with default gray color
+    pub fn fill() -> Self {
+        Self {
+            x_offset_percent: 0.0,
+            y_offset_percent: 0.0,
+            width_percent: 1.0,
+            height_percent: 1.0,
+            color: macroquad::prelude::Color::new(0.6, 0.6, 0.6, 1.0), // Gray
+        }
+    }
+
+    /// Creates a Building with custom color that fills the block
+    pub fn fill_with_color(color: macroquad::prelude::Color) -> Self {
+        Self {
+            x_offset_percent: 0.0,
+            y_offset_percent: 0.0,
+            width_percent: 1.0,
+            height_percent: 1.0,
+            color,
+        }
+    }
+}
+
+impl BlockObject for Building {
+    fn render(&self, block: &Block, _context: &RenderContext) {
+        use macroquad::prelude::*;
+
+        // Get block position and size in pixels
+        let block_x = block.x();
+        let block_y = block.y();
+        let block_width = block.width();
+        let block_height = block.height();
+
+        // Calculate building position relative to block
+        let x = block_x + (self.x_offset_percent * block_width);
+        let y = block_y + (self.y_offset_percent * block_height);
+        let width = self.width_percent * block_width;
+        let height = self.height_percent * block_height;
+
+        // 3D cube rendering parameters
+        let depth = width * 0.3; // Depth of the cube (30% of width)
+        let cube_height = height * 0.6; // Height of the visible cube part
+
+        // Calculate the base y position (where cube touches ground)
+        let base_y = y + height;
+        let top_y = base_y - cube_height;
+
+        // Colors for different faces (lighter for top and side)
+        let front_color = self.color;
+        let top_color = Color::new(
+            (self.color.r * 1.3).min(1.0),
+            (self.color.g * 1.3).min(1.0),
+            (self.color.b * 1.3).min(1.0),
+            1.0,
+        );
+        let side_color = Color::new(
+            self.color.r * 0.7,
+            self.color.g * 0.7,
+            self.color.b * 0.7,
+            1.0,
+        );
+
+        // Draw right side face (darker)
+        let side_points = vec![
+            Vec2::new(x + width, top_y),
+            Vec2::new(x + width + depth, top_y - depth),
+            Vec2::new(x + width + depth, base_y - depth),
+            Vec2::new(x + width, base_y),
+        ];
+        for i in 0..side_points.len() {
+            let next = (i + 1) % side_points.len();
+            draw_line(
+                side_points[i].x,
+                side_points[i].y,
+                side_points[next].x,
+                side_points[next].y,
+                1.0,
+                side_color,
+            );
+        }
+        // Fill the side
+        draw_triangle(
+            side_points[0],
+            side_points[1],
+            side_points[2],
+            side_color,
+        );
+        draw_triangle(
+            side_points[0],
+            side_points[2],
+            side_points[3],
+            side_color,
+        );
+
+        // Draw top face (lighter)
+        let top_points = vec![
+            Vec2::new(x, top_y),
+            Vec2::new(x + depth, top_y - depth),
+            Vec2::new(x + width + depth, top_y - depth),
+            Vec2::new(x + width, top_y),
+        ];
+        for i in 0..top_points.len() {
+            let next = (i + 1) % top_points.len();
+            draw_line(
+                top_points[i].x,
+                top_points[i].y,
+                top_points[next].x,
+                top_points[next].y,
+                1.0,
+                top_color,
+            );
+        }
+        // Fill the top
+        draw_triangle(
+            top_points[0],
+            top_points[1],
+            top_points[2],
+            top_color,
+        );
+        draw_triangle(
+            top_points[0],
+            top_points[2],
+            top_points[3],
+            top_color,
+        );
+
+        // Draw front face with rounded corners
+        draw_rounded_rectangle(x, top_y, width, cube_height, BLOCK_CORNER_RADIUS, front_color);
+    }
+}
+
+// ============================================================================
 // Block Generation Functions
 // ============================================================================
 
@@ -606,6 +788,10 @@ pub fn generate_grass_blocks() -> Vec<Block> {
     ];
 
     // Create blocks in grid pattern (skip road areas)
+    // Block layout (0-indexed, second row = row 1, third block = column 2):
+    // Row 0: blocks 1,  4,  7, 10
+    // Row 1: blocks 2,  5,  8, 11  <- block 8 is second row, third column
+    // Row 2: blocks 3,  6,  9, 12
     for i in (0..x_boundaries_percent.len() - 1).step_by(2) {
         for j in (0..y_boundaries_percent.len() - 1).step_by(2) {
             let x_percent = x_boundaries_percent[i];
@@ -616,8 +802,16 @@ pub fn generate_grass_blocks() -> Vec<Block> {
             // Create block
             let mut block = Block::new(x_percent, y_percent, width_percent, height_percent, block_id);
 
-            // Add grass object that fills the entire block
-            block.add_object(Box::new(Grass::fill()));
+            // Add appropriate object based on block position
+            // Block 8 is second row, third column - add a building there
+            if block_id == 8 {
+                block.add_object(Box::new(Building::fill_with_color(
+                    macroquad::prelude::Color::new(0.5, 0.6, 0.7, 1.0) // Blue-gray building
+                )));
+            } else {
+                // Add grass to all other blocks
+                block.add_object(Box::new(Grass::fill()));
+            }
 
             blocks.push(block);
             block_id += 1;

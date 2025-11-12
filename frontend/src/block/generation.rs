@@ -71,12 +71,13 @@ pub fn generate_grass_blocks() -> Vec<Block> {
                 // Add building in the center of the block
                 // Positioned at 25% offset, sized to 50% of block dimensions
                 block.add_object(Box::new(Building::new(
-                    0.25, // x_offset: 25% from left
-                    0.25, // y_offset: 25% from top
-                    0.4,  // width: 40% of block width
-                    40.0, // height: 40 pixels tall
-                    0.3,  // depth: 30% of block height
-                    8.0,  // corner_radius: 8 pixels
+                    0.25,  // x_offset: 25% from left
+                    0.25,  // y_offset: 25% from top
+                    0.4,   // width: 40% of block width
+                    40.0,  // height: 40 pixels tall
+                    0.3,   // depth: 30% of block height
+                    8.0,   // corner_radius: 8 pixels
+                    true,  // has_fence: true
                     Color::new(0.5, 0.6, 0.7, 1.0), // Blue-gray building
                 )));
             }

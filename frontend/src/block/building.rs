@@ -28,6 +28,15 @@ const BUILDING_TOP_LIGHTEN: f32 = 0.1;
 /// Corner radius for building top (in pixels)
 pub const BUILDING_CORNER_RADIUS: f32 = 8.0;
 
+/// Fence height in pixels
+const FENCE_HEIGHT: f32 = 8.0;
+
+/// Fence post width in pixels
+const FENCE_POST_WIDTH: f32 = 2.0;
+
+/// Spacing between fence posts in pixels
+const FENCE_POST_SPACING: f32 = 12.0;
+
 // ============================================================================
 // Color Manipulation Helpers
 // ============================================================================
@@ -94,6 +103,9 @@ pub struct Building {
     /// Corner radius in pixels (for rounded top)
     pub corner_radius: f32,
 
+    /// Whether to render a fence around the building
+    pub has_fence: bool,
+
     /// Building color
     pub color: Color,
 }
@@ -108,6 +120,7 @@ impl Building {
     /// * `height_pixels` - Height in pixels (vertical dimension of the 3D building)
     /// * `depth_percent` - Depth as percentage of block height (0.0-1.0)
     /// * `corner_radius` - Corner radius in pixels (for rounded top)
+    /// * `has_fence` - Whether to render a fence around the building
     /// * `color` - Building color
     pub fn new(
         x_offset_percent: f32,
@@ -116,6 +129,7 @@ impl Building {
         height_pixels: f32,
         depth_percent: f32,
         corner_radius: f32,
+        has_fence: bool,
         color: Color,
     ) -> Self {
         Self {
@@ -125,6 +139,7 @@ impl Building {
             height_pixels,
             depth_percent,
             corner_radius,
+            has_fence,
             color,
         }
     }
@@ -139,6 +154,7 @@ impl Building {
     ///     .height(40.0)
     ///     .depth(0.3)
     ///     .corner_radius(8.0)
+    ///     .with_fence(true)
     ///     .color(Color::new(0.5, 0.6, 0.7, 1.0))
     ///     .build();
     /// ```
@@ -265,6 +281,79 @@ impl Building {
             color,
         );
     }
+
+    /// Renders an isometric fence around the building base
+    fn render_fence(&self, params: &RenderParams) {
+        let fence_color = Color::new(0.4, 0.3, 0.2, 1.0); // Brown fence
+        let fence_darken = darken_color(fence_color, 0.1);
+
+        // Calculate fence perimeter with padding around building
+        let padding = 8.0;
+        let fence_x = params.x - padding;
+        let fence_y = params.y - padding;
+        let fence_width = params.width + padding * 2.0;
+        let fence_depth = params.depth + padding * 2.0;
+
+        // Front fence (bottom edge)
+        self.render_fence_segment(
+            fence_x,
+            fence_y + fence_depth,
+            fence_width,
+            true,
+            fence_color,
+        );
+
+        // Right fence (right edge with isometric angle)
+        let num_posts = (fence_depth / FENCE_POST_SPACING) as i32;
+        for i in 0..num_posts {
+            let offset = i as f32 * FENCE_POST_SPACING;
+            let post_x = fence_x + fence_width;
+            let post_y = fence_y + offset;
+
+            // Post (vertical line going up)
+            draw_rectangle(post_x, post_y - FENCE_HEIGHT, FENCE_POST_WIDTH, FENCE_HEIGHT, fence_darken);
+
+            // Horizontal rail
+            if i < num_posts - 1 {
+                draw_rectangle(
+                    post_x,
+                    post_y - FENCE_HEIGHT / 2.0,
+                    FENCE_POST_WIDTH,
+                    FENCE_POST_SPACING,
+                    fence_darken,
+                );
+            }
+        }
+    }
+
+    /// Renders a horizontal fence segment
+    fn render_fence_segment(&self, x: f32, y: f32, width: f32, _is_front: bool, color: Color) {
+        let num_posts = (width / FENCE_POST_SPACING) as i32;
+
+        for i in 0..num_posts {
+            let post_x = x + i as f32 * FENCE_POST_SPACING;
+
+            // Draw vertical post
+            draw_rectangle(
+                post_x,
+                y - FENCE_HEIGHT,
+                FENCE_POST_WIDTH,
+                FENCE_HEIGHT,
+                color,
+            );
+
+            // Draw horizontal rail connecting to next post
+            if i < num_posts - 1 {
+                draw_rectangle(
+                    post_x + FENCE_POST_WIDTH,
+                    y - FENCE_HEIGHT / 2.0,
+                    FENCE_POST_SPACING - FENCE_POST_WIDTH,
+                    2.0,
+                    color,
+                );
+            }
+        }
+    }
 }
 
 impl BlockObject for Building {
@@ -295,6 +384,11 @@ impl BlockObject for Building {
             width,
             depth,
         };
+
+        // Render fence first (behind building)
+        if self.has_fence {
+            self.render_fence(&params);
+        }
 
         // Render all three visible faces
         self.render_front_face(&params);
@@ -339,6 +433,7 @@ pub struct BuildingBuilder {
     height_pixels: Option<f32>,
     depth_percent: Option<f32>,
     corner_radius: Option<f32>,
+    has_fence: Option<bool>,
     color: Option<Color>,
 }
 
@@ -352,6 +447,7 @@ impl BuildingBuilder {
             height_pixels: None,
             depth_percent: None,
             corner_radius: None,
+            has_fence: None,
             color: None,
         }
     }
@@ -399,6 +495,12 @@ impl BuildingBuilder {
         self
     }
 
+    /// Sets whether the building has a fence
+    pub fn with_fence(mut self, has_fence: bool) -> Self {
+        self.has_fence = Some(has_fence);
+        self
+    }
+
     /// Sets the building color
     pub fn color(mut self, color: Color) -> Self {
         self.color = Some(color);
@@ -414,6 +516,7 @@ impl BuildingBuilder {
     /// - height_pixels: 50.0 (50 pixels tall)
     /// - depth_percent: 0.3 (30% of block height)
     /// - corner_radius: 8.0 (8 pixel corner radius)
+    /// - has_fence: false (no fence)
     /// - color: Gray (0.6, 0.6, 0.6, 1.0)
     pub fn build(self) -> Building {
         Building {
@@ -423,6 +526,7 @@ impl BuildingBuilder {
             height_pixels: self.height_pixels.unwrap_or(50.0),
             depth_percent: self.depth_percent.unwrap_or(0.3),
             corner_radius: self.corner_radius.unwrap_or(BUILDING_CORNER_RADIUS),
+            has_fence: self.has_fence.unwrap_or(false),
             color: self.color.unwrap_or(Color::new(0.6, 0.6, 0.6, 1.0)),
         }
     }

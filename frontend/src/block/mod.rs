@@ -9,10 +9,12 @@
 //! - Grass, Building, etc.: Concrete implementations of BlockObject
 
 mod building;
+mod fence;
 mod generation;
 mod grass;
 
 pub use building::{Building, BuildingBuilder, BUILDING_CORNER_RADIUS};
+pub use fence::{Fence, FenceBuilder};
 pub use generation::generate_grass_blocks;
 pub use grass::{Grass, GrassBuilder};
 

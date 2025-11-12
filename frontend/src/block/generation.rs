@@ -2,7 +2,7 @@
 //!
 //! Provides functions for generating the city grid of blocks.
 
-use crate::block::{Block, Building, Grass};
+use crate::block::{Block, Building, Fence, Grass};
 use crate::constants::{
     road_network::{HORIZONTAL_ROAD_POSITIONS, VERTICAL_ROAD_POSITIONS},
     visual::ROAD_WIDTH,
@@ -68,6 +68,16 @@ pub fn generate_grass_blocks() -> Vec<Block> {
 
             // Block 8 is second row, third column - add a building in the middle
             if block_id == 8 {
+                // Add a fence on the left side, going from top to bottom
+                block.add_object(Box::new(Fence::new(
+                    0.0,  // x_offset: left edge
+                    0.0,  // y_offset: top edge
+                    0.05, // width: 5% of block width
+                    1.0,  // depth: full depth (top to bottom)
+                    6.0,  // height: 6 pixels tall
+                    Color::new(0.4, 0.3, 0.2, 1.0), // Brown fence
+                )));
+
                 // Add building in the center of the block
                 // Positioned at 25% offset, sized to 50% of block dimensions
                 block.add_object(Box::new(Building::new(

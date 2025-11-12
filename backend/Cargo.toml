@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+axum = "0.7"                          # Web framework
+tokio = { version = "1", features = ["full"] }  # Async runtime
+tokio-stream = { version = "0.1", features = ["sync"] }  # Stream utilities for SSE
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"                    # JSON serialization
+tower-http = { version = "0.5", features = ["cors", "trace"] }  # CORS and logging
+tracing = "0.1"                       # Logging
+tracing-subscriber = "0.3"            # Logging subscriber

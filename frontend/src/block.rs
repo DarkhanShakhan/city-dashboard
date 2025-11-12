@@ -8,12 +8,67 @@
 //! - BlockObject: Trait for things that can be rendered (Grass, Building, etc.)
 //! - Grass, Building, etc.: Concrete implementations of BlockObject
 
-use crate::constants::vehicle::CAR_HEIGHT;
 use crate::constants::visual::{BLOCK_CORNER_RADIUS, DEPTH_OFFSET, GRASS_COLOR, GRASS_DEPTH_COLOR};
 use crate::models::Direction;
 use crate::rendering::draw_rounded_rectangle;
 use macroquad::prelude::*;
 use std::collections::HashMap;
+
+// ============================================================================
+// Building Rendering Constants
+// ============================================================================
+
+/// Isometric projection X offset factor (cos(30°) ≈ 0.866)
+/// Used to calculate horizontal offset for 3D building height
+const ISOMETRIC_X_FACTOR: f32 = 0.866;
+
+/// Isometric projection Y offset factor (sin(30°) = 0.5)
+/// Used to calculate vertical offset for 3D building height
+const ISOMETRIC_Y_FACTOR: f32 = 0.5;
+
+/// Amount to darken side faces of buildings for 3D effect
+const BUILDING_SIDE_DARKEN: f32 = 0.15;
+
+/// Amount to lighten top face of buildings for 3D effect
+const BUILDING_TOP_LIGHTEN: f32 = 0.1;
+
+// ============================================================================
+// Color Manipulation Helpers
+// ============================================================================
+
+/// Darkens a color by a specified amount, clamping to prevent negative values
+///
+/// # Arguments
+/// * `color` - The original color
+/// * `amount` - Amount to subtract from RGB channels (0.0-1.0)
+///
+/// # Returns
+/// A new color with darkened RGB values, alpha channel unchanged
+fn darken_color(color: Color, amount: f32) -> Color {
+    Color::new(
+        (color.r - amount).max(0.0),
+        (color.g - amount).max(0.0),
+        (color.b - amount).max(0.0),
+        color.a,
+    )
+}
+
+/// Lightens a color by a specified amount, clamping to prevent values > 1.0
+///
+/// # Arguments
+/// * `color` - The original color
+/// * `amount` - Amount to add to RGB channels (0.0-1.0)
+///
+/// # Returns
+/// A new color with lightened RGB values, alpha channel unchanged
+fn lighten_color(color: Color, amount: f32) -> Color {
+    Color::new(
+        (color.r + amount).min(1.0),
+        (color.g + amount).min(1.0),
+        (color.b + amount).min(1.0),
+        color.a,
+    )
+}
 
 // ============================================================================
 // Render Context
@@ -584,8 +639,8 @@ pub struct Building {
     /// Width as percentage of block width (0.0-1.0)
     pub width_percent: f32,
 
-    /// Height as percentage of block height (0.0-1.0)
-    pub height: f32,
+    /// Height in pixels (vertical dimension of the 3D building)
+    pub height_pixels: f32,
 
     /// Depth as percentage of block height (0.0-1.0)
     pub depth_percent: f32,
@@ -601,13 +656,14 @@ impl Building {
     /// * `x_offset_percent` - X offset as percentage of block width (0.0-1.0)
     /// * `y_offset_percent` - Y offset as percentage of block height (0.0-1.0)
     /// * `width_percent` - Width as percentage of block width (0.0-1.0)
-    /// * `height_percent` - Height as percentage of block height (0.0-1.0)
+    /// * `height_pixels` - Height in pixels (vertical dimension of the 3D building)
+    /// * `depth_percent` - Depth as percentage of block height (0.0-1.0)
     /// * `color` - Building color
     pub fn new(
         x_offset_percent: f32,
         y_offset_percent: f32,
         width_percent: f32,
-        height: f32,
+        height_pixels: f32,
         depth_percent: f32,
         color: macroquad::prelude::Color,
     ) -> Self {
@@ -615,10 +671,161 @@ impl Building {
             x_offset_percent,
             y_offset_percent,
             width_percent,
-            height,
+            height_pixels,
             depth_percent,
             color,
         }
+    }
+
+    /// Creates a Building object using the builder pattern
+    ///
+    /// # Example
+    /// ```
+    /// let building = Building::builder()
+    ///     .offset(0.25, 0.25)
+    ///     .width(0.4)
+    ///     .height(40.0)
+    ///     .depth(0.3)
+    ///     .color(Color::new(0.5, 0.6, 0.7, 1.0))
+    ///     .build();
+    /// ```
+    pub fn builder() -> BuildingBuilder {
+        BuildingBuilder::new()
+    }
+
+    /// Calculates the isometric projection offset for the building top corner
+    ///
+    /// Returns the (x_offset, y_offset) from the base position to the top corner
+    /// based on the building's height and isometric projection constants.
+    ///
+    /// # Returns
+    /// Tuple of (x_offset, y_offset) in pixels
+    fn calculate_isometric_offset(&self) -> (f32, f32) {
+        (
+            self.height_pixels * ISOMETRIC_X_FACTOR,
+            self.height_pixels * ISOMETRIC_Y_FACTOR,
+        )
+    }
+
+    /// Gets the color for a specific face of the building
+    ///
+    /// # Arguments
+    /// * `face` - Which face to get the color for
+    ///
+    /// # Returns
+    /// The appropriately shaded color for that face
+    fn get_face_color(&self, face: BuildingFace) -> Color {
+        match face {
+            BuildingFace::Front => self.color,
+            BuildingFace::Side => darken_color(self.color, BUILDING_SIDE_DARKEN),
+            BuildingFace::Top => lighten_color(self.color, BUILDING_TOP_LIGHTEN),
+        }
+    }
+}
+
+/// Represents the different faces of a 3D building
+enum BuildingFace {
+    /// Front face (facing camera)
+    Front,
+    /// Right side face
+    Side,
+    /// Top face
+    Top,
+}
+
+/// Parameters for rendering a building face
+struct RenderParams {
+    x: f32,
+    y: f32,
+    x_top: f32,
+    y_top: f32,
+    width: f32,
+    depth: f32,
+}
+
+impl Building {
+    /// Renders the front face of the building
+    fn render_front_face(&self, params: &RenderParams) {
+        let color = self.get_face_color(BuildingFace::Front);
+
+        // Lower triangle
+        draw_triangle(
+            Vec2 {
+                x: params.x,
+                y: params.y + params.depth,
+            },
+            Vec2 {
+                x: params.x_top,
+                y: params.y_top + params.depth,
+            },
+            Vec2 {
+                x: params.x + params.width,
+                y: params.y + params.depth,
+            },
+            color,
+        );
+
+        // Upper triangle
+        draw_triangle(
+            Vec2 {
+                x: params.x + params.width,
+                y: params.y + params.depth,
+            },
+            Vec2 {
+                x: params.x_top + params.width,
+                y: params.y_top + params.depth,
+            },
+            Vec2 {
+                x: params.x_top,
+                y: params.y_top + params.depth,
+            },
+            color,
+        );
+    }
+
+    /// Renders the right side face of the building
+    fn render_side_face(&self, params: &RenderParams) {
+        let color = self.get_face_color(BuildingFace::Side);
+
+        // Back triangle
+        draw_triangle(
+            Vec2 {
+                x: params.x + params.width,
+                y: params.y + params.depth,
+            },
+            Vec2 {
+                x: params.x_top + params.width,
+                y: params.y_top + params.depth,
+            },
+            Vec2 {
+                x: params.x_top + params.width,
+                y: params.y_top,
+            },
+            color,
+        );
+
+        // Front triangle
+        draw_triangle(
+            Vec2 {
+                x: params.x + params.width,
+                y: params.y + params.depth,
+            },
+            Vec2 {
+                x: params.x + params.width,
+                y: params.y,
+            },
+            Vec2 {
+                x: params.x_top + params.width,
+                y: params.y_top,
+            },
+            color,
+        );
+    }
+
+    /// Renders the top face of the building
+    fn render_top_face(&self, params: &RenderParams) {
+        let color = self.get_face_color(BuildingFace::Top);
+        draw_rectangle(params.x_top, params.y_top, params.width, params.depth, color);
     }
 }
 
@@ -636,79 +843,114 @@ impl BlockObject for Building {
         let width = self.width_percent * block_width;
         let depth = self.depth_percent * block_height;
 
-        let x_top = x - self.height * 0.866;
-        let y_top = y - self.height * 0.5;
+        // Calculate isometric offset for building top
+        let (x_offset, y_offset) = self.calculate_isometric_offset();
+        let x_top = x - x_offset;
+        let y_top = y - y_offset;
 
-        // FRONT SIDE
-        draw_triangle(
-            Vec2 { x, y: y + depth },
-            Vec2 {
-                x: x_top,
-                y: y_top + depth,
-            },
-            Vec2 {
-                x: x + width,
-                y: y + depth,
-            },
-            self.color,
-        );
+        // Prepare rendering parameters
+        let params = RenderParams {
+            x,
+            y,
+            x_top,
+            y_top,
+            width,
+            depth,
+        };
 
-        draw_triangle(
-            Vec2 {
-                x: x + width,
-                y: y + depth,
-            },
-            Vec2 {
-                x: x_top + width,
-                y: y_top + depth,
-            },
-            Vec2 {
-                x: x_top,
-                y: y_top + depth,
-            },
-            self.color,
-        );
+        // Render all three visible faces
+        self.render_front_face(&params);
+        self.render_side_face(&params);
+        self.render_top_face(&params);
+    }
+}
 
-        // RIGHT SIDE
-        let mut side_color = self.color;
-        side_color.b -= 0.15;
-        side_color.r -= 0.15;
-        side_color.g -= 0.15;
-        draw_triangle(
-            Vec2 {
-                x: x + width,
-                y: y + depth,
-            },
-            Vec2 {
-                x: x_top + width,
-                y: y_top + depth,
-            },
-            Vec2 {
-                x: x_top + width,
-                y: y_top,
-            },
-            side_color,
-        );
+/// Builder for Building objects
+pub struct BuildingBuilder {
+    x_offset_percent: Option<f32>,
+    y_offset_percent: Option<f32>,
+    width_percent: Option<f32>,
+    height_pixels: Option<f32>,
+    depth_percent: Option<f32>,
+    color: Option<macroquad::prelude::Color>,
+}
 
-        draw_triangle(
-            Vec2 {
-                x: x + width,
-                y: y + depth,
-            },
-            Vec2 { x: x + width, y: y },
-            Vec2 {
-                x: x_top + width,
-                y: y_top,
-            },
-            side_color,
-        );
+impl BuildingBuilder {
+    /// Creates a new BuildingBuilder
+    fn new() -> Self {
+        Self {
+            x_offset_percent: None,
+            y_offset_percent: None,
+            width_percent: None,
+            height_pixels: None,
+            depth_percent: None,
+            color: None,
+        }
+    }
 
-        // TOP SIDE
-        let mut color = self.color;
-        color.b += 0.1;
-        color.r += 0.1;
-        color.g += 0.1;
-        draw_rectangle(x_top, y_top, width, depth, color);
+    /// Sets the offset position within the block
+    pub fn offset(mut self, x_offset_percent: f32, y_offset_percent: f32) -> Self {
+        self.x_offset_percent = Some(x_offset_percent);
+        self.y_offset_percent = Some(y_offset_percent);
+        self
+    }
+
+    /// Sets the x offset within the block
+    pub fn x_offset(mut self, x_offset_percent: f32) -> Self {
+        self.x_offset_percent = Some(x_offset_percent);
+        self
+    }
+
+    /// Sets the y offset within the block
+    pub fn y_offset(mut self, y_offset_percent: f32) -> Self {
+        self.y_offset_percent = Some(y_offset_percent);
+        self
+    }
+
+    /// Sets the width relative to block width
+    pub fn width(mut self, width_percent: f32) -> Self {
+        self.width_percent = Some(width_percent);
+        self
+    }
+
+    /// Sets the height in pixels
+    pub fn height(mut self, height_pixels: f32) -> Self {
+        self.height_pixels = Some(height_pixels);
+        self
+    }
+
+    /// Sets the depth relative to block height
+    pub fn depth(mut self, depth_percent: f32) -> Self {
+        self.depth_percent = Some(depth_percent);
+        self
+    }
+
+    /// Sets the building color
+    pub fn color(mut self, color: macroquad::prelude::Color) -> Self {
+        self.color = Some(color);
+        self
+    }
+
+    /// Builds the Building object
+    ///
+    /// Uses default values if not set:
+    /// - x_offset_percent: 0.0 (left edge of block)
+    /// - y_offset_percent: 0.0 (top edge of block)
+    /// - width_percent: 0.3 (30% of block width)
+    /// - height_pixels: 50.0 (50 pixels tall)
+    /// - depth_percent: 0.3 (30% of block height)
+    /// - color: Gray (0.6, 0.6, 0.6, 1.0)
+    pub fn build(self) -> Building {
+        Building {
+            x_offset_percent: self.x_offset_percent.unwrap_or(0.0),
+            y_offset_percent: self.y_offset_percent.unwrap_or(0.0),
+            width_percent: self.width_percent.unwrap_or(0.3),
+            height_pixels: self.height_pixels.unwrap_or(50.0),
+            depth_percent: self.depth_percent.unwrap_or(0.3),
+            color: self
+                .color
+                .unwrap_or(macroquad::prelude::Color::new(0.6, 0.6, 0.6, 1.0)),
+        }
     }
 }
 
@@ -783,11 +1025,11 @@ pub fn generate_grass_blocks() -> Vec<Block> {
                 // Add building in the center of the block
                 // Positioned at 25% offset, sized to 50% of block dimensions
                 block.add_object(Box::new(Building::new(
-                    0.25, // x_offset: 25% from left
-                    0.25, // y_offset: 25% from top
-                    0.4,
-                    40.0, // width: 50% of block width
-                    0.3,  // height: 50% of block height
+                    0.25,  // x_offset: 25% from left
+                    0.25,  // y_offset: 25% from top
+                    0.4,   // width: 40% of block width
+                    40.0,  // height: 40 pixels tall
+                    0.3,   // depth: 30% of block height
                     macroquad::prelude::Color::new(0.5, 0.6, 0.7, 1.0), // Blue-gray building
                 )));
             }

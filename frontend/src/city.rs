@@ -306,16 +306,25 @@ impl City {
     /// Renders static environment elements (grass, roads, intersections)
     ///
     /// Draws the background environment including:
-    /// - Grass blocks with 2.5D depth effect
+    /// - Grass blocks with 2.5D depth effect (via Block rendering)
     /// - Road center lines (dashed)
     /// - Intersection markings and crosswalks
     ///
     /// This should be called first in the rendering pipeline as it draws
     /// the background layer.
     pub fn render_environment(&self) {
-        use crate::rendering::{draw_grass_blocks, draw_intersection_markings, draw_road_lines};
+        use crate::block::RenderContext;
+        use crate::rendering::{draw_intersection_markings, draw_road_lines};
 
-        draw_grass_blocks();
+        // Render grass blocks (static, so time and danger_mode don't matter)
+        let context = RenderContext::new(0.0, false);
+        for block in self.blocks.values() {
+            // Only render blocks with grass (not LED display block)
+            if block.id != 0 {
+                block.render(&context);
+            }
+        }
+
         draw_road_lines();
 
         // Convert HashMap values to Vec for rendering
@@ -371,8 +380,13 @@ impl City {
         // Create render context with current state
         let context = RenderContext::new(time, danger_mode);
 
-        // Render all blocks and their objects (including LED displays)
-        self.render_blocks(&context);
+        // Render only LED display blocks (id 0)
+        // Grass blocks are rendered in render_environment
+        for block in self.blocks.values() {
+            if block.id == 0 {
+                block.render(&context);
+            }
+        }
     }
 
     // ========================================================================

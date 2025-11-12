@@ -41,9 +41,15 @@ async fn main() -> Result<(), macroquad::Error> {
         city.add_intersection(intersection);
     }
 
+    // Add grass blocks to the city
+    use block::{Block, generate_grass_blocks};
+    let grass_blocks = generate_grass_blocks();
+    for grass_block in grass_blocks {
+        city.add_block(grass_block);
+    }
+
     // Create block with LED display (second block in first row)
     // This block is between the first and second vertical roads, in the top row
-    use block::Block;
     use led_display_object::LEDDisplay;
     use constants::road_network::{VERTICAL_ROAD_POSITIONS, HORIZONTAL_ROAD_POSITIONS};
     use constants::visual::ROAD_WIDTH;

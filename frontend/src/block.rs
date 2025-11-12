@@ -563,3 +563,66 @@ impl GrassBuilder {
         }
     }
 }
+
+// ============================================================================
+// Block Generation Functions
+// ============================================================================
+
+/// Generates all grass blocks for the city grid
+///
+/// Creates a 4×3 grid of blocks (12 total) in the spaces between roads.
+/// Each block contains a Grass object that fills the entire block.
+///
+/// # Returns
+/// Vector of Block instances, each containing a Grass object
+pub fn generate_grass_blocks() -> Vec<Block> {
+    use crate::constants::{
+        road_network::{HORIZONTAL_ROAD_POSITIONS, VERTICAL_ROAD_POSITIONS},
+        visual::ROAD_WIDTH,
+    };
+
+    let mut blocks = Vec::new();
+    let mut block_id = 1; // Start from 1 (0 is reserved for LED display block)
+
+    // Calculate boundaries in percentage coordinates
+    let x_boundaries_percent = [
+        0.0,
+        VERTICAL_ROAD_POSITIONS[0] - (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_width(),
+        VERTICAL_ROAD_POSITIONS[0] + (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_width(),
+        VERTICAL_ROAD_POSITIONS[1] - (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_width(),
+        VERTICAL_ROAD_POSITIONS[1] + (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_width(),
+        VERTICAL_ROAD_POSITIONS[2] - (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_width(),
+        VERTICAL_ROAD_POSITIONS[2] + (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_width(),
+        1.0,
+    ];
+
+    let y_boundaries_percent = [
+        0.0,
+        HORIZONTAL_ROAD_POSITIONS[0] - (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_height(),
+        HORIZONTAL_ROAD_POSITIONS[0] + (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_height(),
+        HORIZONTAL_ROAD_POSITIONS[1] - (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_height(),
+        HORIZONTAL_ROAD_POSITIONS[1] + (ROAD_WIDTH / 2.0) / macroquad::prelude::screen_height(),
+        1.0,
+    ];
+
+    // Create blocks in grid pattern (skip road areas)
+    for i in (0..x_boundaries_percent.len() - 1).step_by(2) {
+        for j in (0..y_boundaries_percent.len() - 1).step_by(2) {
+            let x_percent = x_boundaries_percent[i];
+            let y_percent = y_boundaries_percent[j];
+            let width_percent = x_boundaries_percent[i + 1] - x_percent;
+            let height_percent = y_boundaries_percent[j + 1] - y_percent;
+
+            // Create block
+            let mut block = Block::new(x_percent, y_percent, width_percent, height_percent, block_id);
+
+            // Add grass object that fills the entire block
+            block.add_object(Box::new(Grass::fill()));
+
+            blocks.push(block);
+            block_id += 1;
+        }
+    }
+
+    blocks
+}

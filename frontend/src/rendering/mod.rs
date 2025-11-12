@@ -19,7 +19,7 @@ mod vehicles;
 mod utils;
 
 // Re-export public API
-pub use environment::{draw_grass_blocks, draw_intersection_markings};
+pub use environment::draw_intersection_markings;
 pub use roads::draw_road_lines;
 pub use vehicles::{draw_car, draw_guarded_building};
 pub use utils::draw_rounded_rectangle;
